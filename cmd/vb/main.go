@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/yourname/voidabyss/internal/app"
+	"github.com/dragonbytelabs/voidabyss/internal/app"
 )
 
 const version = "0.1.0"
