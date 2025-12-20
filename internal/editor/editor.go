@@ -10,6 +10,12 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+/*
+====================
+  Types & State
+====================
+*/
+
 type Mode int
 
 const (
@@ -27,39 +33,43 @@ type Editor struct {
 	colOffset int
 
 	mode  Mode
-	wantX int 
+	wantX int
 
-	// command-line (":")
+	// command mode
 	cmdBuf    []rune
 	statusMsg string
 	filename  string
 	dirty     bool
 
-	
+	// vim-ish state
 	pendingCount int
-	pendingOp    rune // 'd','c','y'
+	pendingOp    rune // d / c / y
 	yankBuf      []string
 }
 
-// --- constructors / entrypoints ---
+/*
+====================
+  Entry Points
+====================
+*/
 
 func OpenFile(path string) error {
-	ed, err := NewEditorFromFile(path)
+	ed, err := newEditorFromFile(path)
 	if err != nil {
 		return err
 	}
-	return ed.Run()
+	return ed.run()
 }
 
 func OpenProject(path string) error {
-	ed, err := NewEditorFromProject(path)
+	ed, err := newEditorFromProject(path)
 	if err != nil {
 		return err
 	}
-	return ed.Run()
+	return ed.run()
 }
 
-func NewEditorFromFile(path string) (*Editor, error) {
+func newEditorFromFile(path string) (*Editor, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -68,7 +78,6 @@ func NewEditorFromFile(path string) (*Editor, error) {
 	var lines []string
 	data, err := os.ReadFile(abs)
 	if err != nil {
-		// If file doesn't exist, start empty but remember filename.
 		lines = []string{""}
 	} else {
 		txt := strings.ReplaceAll(string(data), "\r\n", "\n")
@@ -94,8 +103,8 @@ func NewEditorFromFile(path string) (*Editor, error) {
 	}, nil
 }
 
-func NewEditorFromProject(dir string) (*Editor, error) {
-	abs, err := filepath.Abs(dir)
+func newEditorFromProject(path string) (*Editor, error) {
+	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
@@ -112,19 +121,19 @@ func NewEditorFromProject(dir string) (*Editor, error) {
 		s:        s,
 		lines:    []string{""},
 		mode:     ModeNormal,
-		filename: abs, // just show dir for now
+		filename: abs,
 	}, nil
 }
 
-func (e *Editor) Run() error {
+/*
+====================
+  Main Loop
+====================
+*/
+
+func (e *Editor) run() error {
 	defer e.s.Fini()
-	e.loop()
-	return nil
-}
 
-// --- main loop ---
-
-func (e *Editor) loop() {
 	for {
 		e.ensureCursorValid()
 		e.ensureCursorVisible()
@@ -134,10 +143,10 @@ func (e *Editor) loop() {
 		switch ev := ev.(type) {
 		case *tcell.EventKey:
 			if ev.Key() == tcell.KeyCtrlQ {
-				return
+				return nil
 			}
 			if e.handleKey(ev) {
-				return
+				return nil
 			}
 		case *tcell.EventResize:
 			e.s.Sync()
@@ -145,232 +154,144 @@ func (e *Editor) loop() {
 	}
 }
 
-func (e *Editor) ensureCursorValid() {
-	if len(e.lines) == 0 {
-		e.lines = []string{""}
-	}
-	if e.cy < 0 {
-		e.cy = 0
-	}
-	if e.cy >= len(e.lines) {
-		e.cy = len(e.lines) - 1
-	}
-	lineLen := len([]rune(e.lines[e.cy]))
-	if e.cx < 0 {
-		e.cx = 0
-	}
-	if e.cx > lineLen {
-		e.cx = lineLen
-	}
-}
-
-func (e *Editor) ensureCursorVisible() {
-	w, h := e.s.Size()
-	viewH := max(1, h-1) // last row is status
-
-	if e.cy < e.rowOffset {
-		e.rowOffset = e.cy
-	} else if e.cy >= e.rowOffset+viewH {
-		e.rowOffset = e.cy - viewH + 1
-	}
-
-	if e.cx < e.colOffset {
-		e.colOffset = e.cx
-	} else if e.cx >= e.colOffset+w {
-		e.colOffset = e.cx - w + 1
-	}
-
-	if e.rowOffset < 0 {
-		e.rowOffset = 0
-	}
-	if e.colOffset < 0 {
-		e.colOffset = 0
-	}
-}
-
-// --- drawing ---
+/*
+====================
+  Rendering
+====================
+*/
 
 func (e *Editor) draw() {
 	e.s.Clear()
 	w, h := e.s.Size()
 	style := tcell.StyleDefault
 
-	// buffer
 	for y := 0; y < h-1; y++ {
-		lineIndex := e.rowOffset + y
-		if lineIndex >= len(e.lines) {
+		i := e.rowOffset + y
+		if i >= len(e.lines) {
 			break
 		}
-		runes := []rune(e.lines[lineIndex])
-		start := min(e.colOffset, len(runes))
-		visible := runes[start:]
-
-		for x := 0; x < w && x < len(visible); x++ {
-			e.s.SetContent(x, y, visible[x], nil, style)
+		r := []rune(e.lines[i])
+		start := min(e.colOffset, len(r))
+		for x := 0; x < w && x < len(r[start:]); x++ {
+			e.s.SetContent(x, y, r[start+x], nil, style)
 		}
 	}
 
-	e.drawStatusLine(w, h, style)
+	e.drawStatus(w, h)
 
-	// cursor mapping
-	screenX := e.cx - e.colOffset
-	screenY := e.cy - e.rowOffset
-	if screenX < 0 {
-		screenX = 0
+	x := e.cx - e.colOffset
+	y := e.cy - e.rowOffset
+	if x < 0 {
+		x = 0
 	}
-	if screenY < 0 {
-		screenY = 0
+	if y < 0 {
+		y = 0
 	}
-	if screenY > h-2 {
-		screenY = h - 2
+	if y > h-2 {
+		y = h - 2
 	}
-	e.s.ShowCursor(screenX, screenY)
+	e.s.ShowCursor(x, y)
 	e.s.Show()
 }
 
-func (e *Editor) drawStatusLine(w, h int, style tcell.Style) {
-	modeStr := map[Mode]string{
+func (e *Editor) drawStatus(w, h int) {
+	mode := map[Mode]string{
 		ModeNormal:  "NORMAL",
 		ModeInsert:  "INSERT",
 		ModeCommand: "COMMAND",
-		ModeVisual:  "VISUAL",
 	}[e.mode]
 
-	left := fmt.Sprintf("%s  %s", modeStr, e.filenameOrDefault())
+	left := fmt.Sprintf("%s  %s", mode, e.filename)
 	if e.dirty {
 		left += " [+]"
 	}
 
-	right := fmt.Sprintf("  Pos: %d,%d", e.cx, e.cy)
-
 	msg := e.statusMsg
 	if e.mode == ModeNormal {
-		// show pending count/op (like vim command echo)
 		if e.pendingCount > 0 {
 			msg = fmt.Sprintf("%d", e.pendingCount)
 		}
 		if e.pendingOp != 0 {
-			if msg == "" {
-				msg = string(e.pendingOp)
-			} else {
-				msg += string(e.pendingOp)
-			}
+			msg += string(e.pendingOp)
 		}
 	}
 	if e.mode == ModeCommand {
 		msg = ":" + string(e.cmdBuf)
 	}
 
-	// build bar
 	bar := left
-	space := w - len([]rune(bar)) - len([]rune(right))
-	if space < 1 {
-		space = 1
-	}
-	bar = bar + strings.Repeat(" ", space) + right
-
-	// background
-	for x := 0; x < w; x++ {
-		e.s.SetContent(x, h-1, ' ', nil, style.Reverse(true))
+	for len([]rune(bar)) < w {
+		bar += " "
 	}
 
-	// text
-	for x, r := range []rune(bar) {
+	for x, r := range bar {
 		if x >= w {
 			break
 		}
-		e.s.SetContent(x, h-1, r, nil, style.Reverse(true))
+		e.s.SetContent(x, h-1, r, nil, tcell.StyleDefault.Reverse(true))
 	}
 
-	// overlay msg
 	if msg != "" {
-		startX := 0
-		if e.mode != ModeCommand {
-			startX = min(len([]rune(left))+2, w-1)
-		}
-		for i, r := range []rune(msg) {
-			x := startX + i
-			if x >= w {
-				break
-			}
-			e.s.SetContent(x, h-1, r, nil, style.Reverse(true))
+		for i, r := range msg {
+			x := min(len([]rune(left))+2+i, w-1)
+			e.s.SetContent(x, h-1, r, nil, tcell.StyleDefault.Reverse(true))
 		}
 	}
 }
 
-func (e *Editor) filenameOrDefault() string {
-	if e.filename == "" {
-		return "[No Name]"
-	}
-	return e.filename
-}
-
-// --- input dispatch ---
+/*
+====================
+  Input Handling
+====================
+*/
 
 func (e *Editor) handleKey(k *tcell.EventKey) bool {
-	// ESC: always return to normal and clear pending state
 	if k.Key() == tcell.KeyEsc {
 		e.mode = ModeNormal
-		e.cmdBuf = e.cmdBuf[:0]
-		e.statusMsg = ""
 		e.pendingCount = 0
 		e.pendingOp = 0
+		e.cmdBuf = nil
+		e.statusMsg = ""
 		return false
 	}
 
 	switch e.mode {
-	case ModeCommand:
-		return e.handleCommandKey(k)
+	case ModeNormal:
+		e.handleNormal(k)
 	case ModeInsert:
-		e.handleInsertKey(k)
-	default:
-		e.handleNormalKey(k)
+		e.handleInsert(k)
+	case ModeCommand:
+		return e.handleCommand(k)
 	}
 	return false
 }
 
-func (e *Editor) handleNormalKey(k *tcell.EventKey) {
-	consumeCount := func() int {
+func (e *Editor) handleNormal(k *tcell.EventKey) {
+	consume := func() int {
 		if e.pendingCount == 0 {
 			return 1
 		}
-		c := e.pendingCount
+		n := e.pendingCount
 		e.pendingCount = 0
-		return c
+		return n
 	}
 
-	switch k.Key() {
-	case tcell.KeyUp:
-		e.moveUp(consumeCount())
-		return
-	case tcell.KeyDown:
-		e.moveDown(consumeCount())
-		return
-	case tcell.KeyLeft:
-		e.moveLeft(consumeCount())
-		return
-	case tcell.KeyRight:
-		e.moveRight(consumeCount())
-		return
-	case tcell.KeyRune:
-		e.statusMsg = ""
+	if k.Key() == tcell.KeyRune {
 		r := k.Rune()
 
-		// digits build counts. BUT bare '0' is command (BOL) *if no count yet and no op pending*.
 		if r >= '0' && r <= '9' {
 			d := int(r - '0')
 			if d == 0 && e.pendingCount == 0 && e.pendingOp == 0 {
 				e.cx = 0
-				e.wantX = e.cx
+				e.wantX = 0
 				return
 			}
 			e.pendingCount = e.pendingCount*10 + d
 			return
 		}
 
-		n := consumeCount()
+		n := consume()
 
-		// if operator pending, treat rune as motion
 		if e.pendingOp != 0 {
 			e.applyOperator(e.pendingOp, r, n)
 			e.pendingOp = 0
@@ -380,12 +301,6 @@ func (e *Editor) handleNormalKey(k *tcell.EventKey) {
 		switch r {
 		case 'd', 'c', 'y':
 			e.pendingOp = r
-			return
-
-		case '$':
-			e.cx = len([]rune(e.lines[e.cy]))
-			e.wantX = e.cx
-
 		case 'h':
 			e.moveLeft(n)
 		case 'j':
@@ -394,50 +309,43 @@ func (e *Editor) handleNormalKey(k *tcell.EventKey) {
 			e.moveUp(n)
 		case 'l':
 			e.moveRight(n)
-
 		case 'i':
 			e.mode = ModeInsert
-
 		case 'a':
-			lineLen := len([]rune(e.lines[e.cy]))
-			if e.cx < lineLen {
-				e.cx++
-			}
-			e.wantX = e.cx
+			e.moveRight(1)
 			e.mode = ModeInsert
-
 		case 'A':
 			e.cx = len([]rune(e.lines[e.cy]))
 			e.wantX = e.cx
 			e.mode = ModeInsert
-
 		case 'x':
 			for i := 0; i < n; i++ {
 				e.deleteAtCursor()
 			}
-
 		case 'o':
 			e.openBelow()
 			e.mode = ModeInsert
-
 		case 'O':
 			e.openAbove()
 			e.mode = ModeInsert
-
 		case ':':
 			e.mode = ModeCommand
-			e.cmdBuf = e.cmdBuf[:0]
-
-		default:
-			log.Printf("Unrecognized normal mode command: %q", r)
-			e.pendingCount = 0
-			e.pendingOp = 0
+			e.cmdBuf = nil
+		case '$':
+			e.cx = len([]rune(e.lines[e.cy]))
+			e.wantX = e.cx
 		}
 	}
 }
 
-func (e *Editor) handleInsertKey(k *tcell.EventKey) {
+func (e *Editor) handleInsert(k *tcell.EventKey) {
 	switch k.Key() {
+	case tcell.KeyRune:
+		e.insertRune(k.Rune())
+	case tcell.KeyBackspace, tcell.KeyBackspace2:
+		e.backspace()
+	case tcell.KeyEnter:
+		e.newline()
 	case tcell.KeyUp:
 		e.moveUp(1)
 	case tcell.KeyDown:
@@ -446,73 +354,61 @@ func (e *Editor) handleInsertKey(k *tcell.EventKey) {
 		e.moveLeft(1)
 	case tcell.KeyRight:
 		e.moveRight(1)
-	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		e.backspace()
-	case tcell.KeyEnter:
-		e.newline()
-	case tcell.KeyRune:
-		e.insertRune(k.Rune())
 	}
 }
 
-func (e *Editor) handleCommandKey(k *tcell.EventKey) bool {
+func (e *Editor) handleCommand(k *tcell.EventKey) bool {
 	switch k.Key() {
 	case tcell.KeyEnter:
-		cmd := strings.TrimSpace(string(e.cmdBuf))
-		e.cmdBuf = e.cmdBuf[:0]
+		cmd := string(e.cmdBuf)
+		e.cmdBuf = nil
 		e.mode = ModeNormal
-		return e.execCommand(cmd)
-
+		return e.exec(cmd)
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if len(e.cmdBuf) > 0 {
 			e.cmdBuf = e.cmdBuf[:len(e.cmdBuf)-1]
 		}
-
 	case tcell.KeyRune:
 		e.cmdBuf = append(e.cmdBuf, k.Rune())
 	}
 	return false
 }
 
-// --- commands (:w etc.) ---
+/*
+====================
+  Commands
+====================
+*/
 
-func (e *Editor) execCommand(cmd string) bool {
+func (e *Editor) exec(cmd string) bool {
 	switch cmd {
 	case "q":
 		if e.dirty {
-			e.statusMsg = "No write since last change (use :q! to quit)"
+			e.statusMsg = "No write since last change"
 			return false
 		}
 		return true
 	case "q!":
 		return true
 	case "w":
-		if err := e.save(); err != nil {
-			e.statusMsg = "Write failed: " + err.Error()
-		} else {
-			e.statusMsg = "Wrote " + e.filenameOrDefault()
-			e.dirty = false
-		}
+		e.save()
 	case "wq":
-		if err := e.save(); err != nil {
-			e.statusMsg = "Write failed: " + err.Error()
-			return false
-		}
+		e.save()
 		return true
 	default:
-		e.statusMsg = "Not an editor command: " + cmd
+		e.statusMsg = "Not a command"
 	}
 	return false
 }
 
-// --- buffer ops ---
+/*
+====================
+  Buffer Ops
+====================
+*/
 
 func (e *Editor) insertRune(r rune) {
 	line := []rune(e.lines[e.cy])
-	if e.cx < 0 || e.cx > len(line) {
-		e.ensureCursorValid()
-		line = []rune(e.lines[e.cy])
-	}
 	line = append(line[:e.cx], append([]rune{r}, line[e.cx:]...)...)
 	e.lines[e.cy] = string(line)
 	e.cx++
@@ -523,23 +419,19 @@ func (e *Editor) insertRune(r rune) {
 func (e *Editor) backspace() {
 	if e.cx > 0 {
 		line := []rune(e.lines[e.cy])
-		line = append(line[:e.cx-1], line[e.cx:]...)
-		e.lines[e.cy] = string(line)
+		e.lines[e.cy] = string(append(line[:e.cx-1], line[e.cx:]...))
 		e.cx--
 		e.wantX = e.cx
 		e.dirty = true
 		return
 	}
-
-	// merge with previous line
 	if e.cy > 0 {
 		prev := []rune(e.lines[e.cy-1])
 		cur := []rune(e.lines[e.cy])
-		newCx := len(prev)
 		e.lines[e.cy-1] = string(append(prev, cur...))
 		e.lines = append(e.lines[:e.cy], e.lines[e.cy+1:]...)
 		e.cy--
-		e.cx = newCx
+		e.cx = len(prev)
 		e.wantX = e.cx
 		e.dirty = true
 	}
@@ -547,10 +439,8 @@ func (e *Editor) backspace() {
 
 func (e *Editor) newline() {
 	line := []rune(e.lines[e.cy])
-	left := string(line[:e.cx])
-	right := string(line[e.cx:])
-	e.lines[e.cy] = left
-	e.lines = append(e.lines[:e.cy+1], append([]string{right}, e.lines[e.cy+1:]...)...)
+	e.lines[e.cy] = string(line[:e.cx])
+	e.lines = append(e.lines[:e.cy+1], append([]string{string(line[e.cx:])}, e.lines[e.cy+1:]...)...)
 	e.cy++
 	e.cx = 0
 	e.wantX = 0
@@ -562,56 +452,175 @@ func (e *Editor) deleteAtCursor() {
 	if e.cx >= len(line) {
 		return
 	}
-	line = append(line[:e.cx], line[e.cx+1:]...)
-	e.lines[e.cy] = string(line)
+	e.lines[e.cy] = string(append(line[:e.cx], line[e.cx+1:]...))
 	e.dirty = true
-	e.ensureCursorValid()
 }
 
-func (e *Editor) openBelow() {
-	e.lines = append(e.lines[:e.cy+1], append([]string{""}, e.lines[e.cy+1:]...)...)
-	e.cy++
+/*
+====================
+  Motions
+====================
+*/
+
+func (e *Editor) moveUp(n int)    { e.cy = max(0, e.cy-n) }
+func (e *Editor) moveDown(n int)  { e.cy = min(len(e.lines)-1, e.cy+n) }
+func (e *Editor) moveLeft(n int)  { e.cx = max(0, e.cx-n); e.wantX = e.cx }
+func (e *Editor) moveRight(n int) { e.cx = min(len([]rune(e.lines[e.cy])), e.cx+n); e.wantX = e.cx }
+
+/*
+====================
+  Operators
+====================
+*/
+
+func (e *Editor) applyOperator(op rune, motion rune, count int) {
+	if motion == op {
+		switch op {
+		case 'd':
+			e.deleteLines(count)
+		case 'c':
+			e.deleteLines(count)
+			e.mode = ModeInsert
+		case 'y':
+			e.yankLines(count)
+		}
+		return
+	}
+
+	switch motion {
+	case 'w':
+		switch op {
+		case 'd':
+			e.deleteWord(count)
+		case 'c':
+			e.deleteWord(count)
+			e.mode = ModeInsert
+		case 'y':
+			e.yankWord(count)
+		}
+	case '0':
+		if op == 'd' || op == 'c' {
+			e.deleteToBOL()
+			if op == 'c' {
+				e.mode = ModeInsert
+			}
+		} else if op == 'y' {
+			e.yankToBOL()
+		}
+	case '$':
+		if op == 'd' || op == 'c' {
+			e.deleteToEOL()
+			if op == 'c' {
+				e.mode = ModeInsert
+			}
+		} else if op == 'y' {
+			e.yankToEOL()
+		}
+	}
+}
+
+func (e *Editor) deleteLines(n int) {
+	start := e.cy
+	end := min(len(e.lines), e.cy+n)
+	e.lines = append(e.lines[:start], e.lines[end:]...)
+	if len(e.lines) == 0 {
+		e.lines = []string{""}
+	}
+	e.cy = min(e.cy, len(e.lines)-1)
 	e.cx = 0
 	e.wantX = 0
 	e.dirty = true
 }
 
-func (e *Editor) openAbove() {
-	e.lines = append(e.lines[:e.cy], append([]string{""}, e.lines[e.cy:]...)...)
+func (e *Editor) yankLines(n int) {
+	start := e.cy
+	end := min(len(e.lines), e.cy+n)
+	e.yankBuf = append([]string(nil), e.lines[start:end]...)
+}
+
+func (e *Editor) deleteWord(n int) {
+	line := []rune(e.lines[e.cy])
+	start := e.cx
+	end := start
+	for i := 0; i < n; i++ {
+		for end < len(line) && !isWord(line[end]) {
+			end++
+		}
+		for end < len(line) && isWord(line[end]) {
+			end++
+		}
+	}
+	e.lines[e.cy] = string(append(line[:start], line[end:]...))
+	e.dirty = true
+}
+
+func (e *Editor) yankWord(n int) {
+	line := []rune(e.lines[e.cy])
+	start := e.cx
+	end := start
+	for i := 0; i < n; i++ {
+		for end < len(line) && !isWord(line[end]) {
+			end++
+		}
+		for end < len(line) && isWord(line[end]) {
+			end++
+		}
+	}
+	e.yankBuf = []string{string(line[start:end])}
+}
+
+func (e *Editor) deleteToBOL() {
+	line := []rune(e.lines[e.cy])
+	e.lines[e.cy] = string(line[e.cx:])
 	e.cx = 0
 	e.wantX = 0
 	e.dirty = true
 }
 
-// --- motions ---
-
-func (e *Editor) moveUp(n int) {
-	e.cy = max(0, e.cy-n)
-	e.cx = min(e.wantX, len([]rune(e.lines[e.cy])))
+func (e *Editor) deleteToEOL() {
+	line := []rune(e.lines[e.cy])
+	e.lines[e.cy] = string(line[:e.cx])
+	e.dirty = true
 }
 
-func (e *Editor) moveDown(n int) {
-	e.cy = min(len(e.lines)-1, e.cy+n)
-	e.cx = min(e.wantX, len([]rune(e.lines[e.cy])))
+func (e *Editor) yankToBOL() {
+	line := []rune(e.lines[e.cy])
+	e.yankBuf = []string{string(line[:e.cx])}
 }
 
-func (e *Editor) moveLeft(n int) {
-	e.cx = max(0, e.cx-n)
-	e.wantX = e.cx
+func (e *Editor) yankToEOL() {
+	line := []rune(e.lines[e.cy])
+	e.yankBuf = []string{string(line[e.cx:])}
 }
 
-func (e *Editor) moveRight(n int) {
-	lineLen := len([]rune(e.lines[e.cy]))
-	e.cx = min(lineLen, e.cx+n)
-	e.wantX = e.cx
+/*
+====================
+  Save & Helpers
+====================
+*/
+
+func (e *Editor) save() {
+	data := strings.Join(e.lines, "\n")
+	_ = os.WriteFile(e.filename, []byte(data), 0644)
+	e.dirty = false
 }
 
-// --- I/O ---
+func isWord(r rune) bool {
+	return r == '_' ||
+		(r >= 'a' && r <= 'z') ||
+		(r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9')
+}
 
-func (e *Editor) save() error {
-	// if filename is a directory (project open), default to out.txt in that dir
-	if e.filename == "" || e.filename == "[No Name]" {
-		e.filename = "out.txt"
-	} else {
-		if info, err := os.Stat(e.filename); err == nil && info.IsDir() {
-			e.filename = filepath.Join(e.filename, "out.txt")
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
