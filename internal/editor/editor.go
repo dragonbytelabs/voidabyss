@@ -43,7 +43,6 @@ type Registers struct {
 	unnamed  Register          // "
 	numbered [10]Register      // 0-9
 	named    map[rune]Register // a-z
-	active   rune              // currently active named register
 }
 
 type Editor struct {
@@ -71,6 +70,15 @@ type Editor struct {
 	pendingOp        rune // d / c / y
 	regs             Registers
 	awaitingRegister bool
+	regOverride      rune
+	regOverrideSet   bool
+
+	// popup UI
+	popupActive bool
+	popupTitle  string
+	popupLines  []string
+	popupScroll int
+	popupFixedH int
 }
 
 /*
@@ -110,7 +118,6 @@ func newEditorFromFile(path string) (*Editor, error) {
 	}
 
 	ed.regs.named = make(map[rune]Register)
-	ed.regs.active = '"'
 
 	if readErr != nil && !os.IsNotExist(readErr) {
 		ed.statusMsg = "read failed: " + readErr.Error()
@@ -142,7 +149,6 @@ func newEditorFromProject(path string) (*Editor, error) {
 		filename: abs, // show dir in statusline for now
 	}
 	ed.regs.named = make(map[rune]Register)
-	ed.regs.active = '"'
 
 	return ed, nil
 }
@@ -378,6 +384,10 @@ func (e *Editor) draw() {
 
 	e.drawStatus(w, h)
 
+	if e.popupActive {
+		e.drawPopup(w, h)
+	}
+
 	screenX := e.cx - e.colOffset
 	screenY := e.cy - e.rowOffset
 	if screenX < 0 {
@@ -402,7 +412,12 @@ func (e *Editor) drawStatus(w, h int) {
 		ModeVisual:  "VISUAL",
 	}[e.mode]
 
-	left := fmt.Sprintf("%s  %s", mode, e.filename)
+	regCh := rune('"')
+	if e.regOverrideSet {
+		regCh = e.regOverride
+	}
+	left := fmt.Sprintf("%s  %s  reg:%c", mode, e.filename, regCh)
+
 	if e.dirty {
 		left += " [+]"
 	}
@@ -444,6 +459,229 @@ func (e *Editor) drawStatus(w, h int) {
 	}
 }
 
+func (e *Editor) drawPopup(w, h int) {
+	if !e.popupActive {
+		return
+	}
+
+	lines := e.popupLines
+	if lines == nil {
+		lines = []string{}
+	}
+
+	// Determine popup width from title + content
+	contentW := 0
+	for _, line := range lines {
+		l := len([]rune(line))
+		if l > contentW {
+			contentW = l
+		}
+	}
+	titleW := len([]rune(e.popupTitle))
+	if titleW+2 > contentW {
+		contentW = titleW + 2
+	}
+
+	// clamp width to screen
+	if contentW > w-6 {
+		contentW = w - 6
+	}
+	if contentW < 20 {
+		contentW = 20
+	}
+
+	// How many lines we can actually DISPLAY (no indexing beyond len(lines))
+	displayH := len(lines)
+	if displayH > h-6 {
+		displayH = h - 6
+	}
+	if displayH < 1 {
+		displayH = 1
+	}
+
+	minVisualH := 3
+	visualH := displayH
+
+	// FORCE fixed height if set
+	if e.popupFixedH > 0 {
+		visualH = e.popupFixedH
+	}
+
+	// still clamp to screen and minimum
+	if visualH > h-6 {
+		visualH = h - 6
+	}
+	if visualH < minVisualH {
+		visualH = minVisualH
+	}
+
+	boxW := contentW + 4
+	boxH := visualH + 4
+
+	x0 := (w - boxW) / 2
+	y0 := (h - boxH) / 2
+	if x0 < 0 {
+		x0 = 0
+	}
+	if y0 < 0 {
+		y0 = 0
+	}
+
+	border := tcell.StyleDefault.Reverse(true)
+	textStyle := tcell.StyleDefault.Reverse(true)
+
+	// Clear box area
+	for yy := 0; yy < boxH; yy++ {
+		for xx := 0; xx < boxW; xx++ {
+			e.s.SetContent(x0+xx, y0+yy, ' ', nil, border)
+		}
+	}
+
+	// Border
+	e.s.SetContent(x0, y0, '+', nil, border)
+	e.s.SetContent(x0+boxW-1, y0, '+', nil, border)
+	e.s.SetContent(x0, y0+boxH-1, '+', nil, border)
+	e.s.SetContent(x0+boxW-1, y0+boxH-1, '+', nil, border)
+
+	for xx := 1; xx < boxW-1; xx++ {
+		e.s.SetContent(x0+xx, y0, '-', nil, border)
+		e.s.SetContent(x0+xx, y0+boxH-1, '-', nil, border)
+	}
+	for yy := 1; yy < boxH-1; yy++ {
+		e.s.SetContent(x0, y0+yy, '|', nil, border)
+		e.s.SetContent(x0+boxW-1, y0+yy, '|', nil, border)
+	}
+
+	// Title
+	title := " " + e.popupTitle + " "
+	titleRunes := []rune(title)
+	tx := x0 + (boxW-len(titleRunes))/2
+	if tx < x0+1 {
+		tx = x0 + 1
+	}
+	for i, r := range titleRunes {
+		x := tx + i
+		if x >= x0+boxW-1 {
+			break
+		}
+		e.s.SetContent(x, y0, r, nil, border)
+	}
+
+	// Content
+	startY := y0 + 2
+	startX := x0 + 2
+
+	maxScroll := 0
+	if len(lines) > visualH {
+		maxScroll = len(lines) - visualH
+	}
+	if e.popupScroll < 0 {
+		e.popupScroll = 0
+	}
+	if e.popupScroll > maxScroll {
+		e.popupScroll = maxScroll
+	}
+
+	for i := 0; i < visualH; i++ {
+		idx := e.popupScroll + i
+
+		var line string
+		if idx >= 0 && idx < len(lines) {
+			line = lines[idx]
+		} else {
+			line = ""
+		}
+
+		runes := []rune(line)
+		if len(runes) > contentW {
+			if contentW > 1 {
+				runes = runes[:contentW-1]
+				runes = append(runes, '…')
+			} else {
+				runes = []rune{'…'}
+			}
+		}
+
+		for j, r := range runes {
+			e.s.SetContent(startX+j, startY+i, r, nil, textStyle)
+		}
+	}
+}
+
+func (e *Editor) openPopup(title string, lines []string) {
+	e.popupActive = true
+	e.popupTitle = title
+	e.popupLines = lines
+	e.popupScroll = 0
+}
+
+func (e *Editor) closePopup() {
+	e.popupActive = false
+	e.popupTitle = ""
+	e.popupLines = nil
+	e.popupFixedH = 0
+	e.popupScroll = 0
+}
+
+// formatRegisters returns human-friendly lines for :reg popup.
+func (e *Editor) formatRegisters() []string {
+	lines := make([]string, 0, 32)
+
+	// unnamed
+	lines = append(lines, fmt.Sprintf("\"  %s", e.formatRegValue(e.regs.unnamed)))
+
+	// numbered 0-9
+	for i := 0; i <= 9; i++ {
+		name := rune('0' + i)
+		r := e.regs.numbered[i]
+		if r.text == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%c  %s", name, e.formatRegValue(r)))
+	}
+
+	// named a-z (only those present)
+	for ch := 'a'; ch <= 'z'; ch++ {
+		r, ok := e.regs.named[ch]
+		if !ok || r.text == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%c  %s", ch, e.formatRegValue(r)))
+	}
+
+	if len(lines) == 0 {
+		return []string{"(no registers)"}
+	}
+	return lines
+}
+
+func (e *Editor) formatRegValue(r Register) string {
+	if r.text == "" {
+		return "(empty)"
+	}
+
+	kind := "char"
+	switch r.kind {
+	case RegLinewise:
+		kind = "line"
+	case RegBlockwise:
+		kind = "block"
+	}
+
+	preview := e.previewText(r.text, 60)
+	return fmt.Sprintf("[%s] %s", kind, preview)
+}
+
+func (e *Editor) previewText(s string, max int) string {
+	// make newlines visible in preview
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max-1]) + "…"
+}
+
 /*
 ====================
   Input Handling
@@ -451,12 +689,42 @@ func (e *Editor) drawStatus(w, h int) {
 */
 
 func (e *Editor) handleKey(k *tcell.EventKey) bool {
+	if e.popupActive {
+		switch k.Key() {
+		case tcell.KeyEsc, tcell.KeyEnter:
+			e.closePopup()
+			return false
+		case tcell.KeyUp:
+			e.popupScroll--
+			return false
+		case tcell.KeyDown:
+			e.popupScroll++
+			return false
+		case tcell.KeyRune:
+			switch k.Rune() {
+			case 'q':
+				e.closePopup()
+			case 'k':
+				e.popupScroll--
+			case 'j':
+				e.popupScroll++
+			}
+			return false
+		}
+		return false
+	}
+
 	if k.Key() == tcell.KeyEsc {
 		e.mode = ModeNormal
 		e.pendingCount = 0
 		e.pendingOp = 0
 		e.cmdBuf = nil
 		e.statusMsg = ""
+
+		e.awaitingRegister = false
+		e.regOverrideSet = false
+		e.regOverride = 0
+
 		return false
 	}
 
@@ -508,11 +776,13 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 
 	if e.awaitingRegister {
 		if isRegisterName(r) {
-			e.regs.active = r
-			e.statusMsg = fmt.Sprintf("reg %c", r)
+			e.regOverride = r
+			e.regOverrideSet = true
+			e.statusMsg = ""
 		} else {
 			e.statusMsg = fmt.Sprintf("invalid register: %c", r)
-			e.regs.active = '"'
+			e.regOverrideSet = false
+			e.regOverride = 0
 		}
 		e.awaitingRegister = false
 		return
@@ -540,7 +810,7 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 	}
 
 	switch r {
-	case 'd', 'c', 'y':
+	case 'd', 'c', 'y', 'g':
 		e.pendingOp = r
 		return
 
@@ -590,6 +860,11 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 	case '"':
 		e.awaitingRegister = true
 		return
+
+	case 'G':
+		e.cy = e.lineCount() - 1
+		e.cx = 0
+		e.wantX = e.cx
 
 	default:
 		log.Printf("unknown normal key: %q", r)
@@ -657,6 +932,10 @@ func (e *Editor) exec(cmd string) bool {
 	case "wq":
 		e.save()
 		return true
+	case "reg", "registers":
+		e.popupFixedH = 10
+		e.openPopup("REGISTERS", e.formatRegisters())
+		return false
 	default:
 		e.statusMsg = "Not a command: " + cmd
 	}
@@ -819,13 +1098,20 @@ func (e *Editor) applyOperator(op rune, motion rune, count int) {
 		switch op {
 		case 'd':
 			e.deleteLines(count)
+			return
 		case 'c':
 			e.deleteLines(count)
 			e.mode = ModeInsert
+			return
 		case 'y':
 			e.yankLines(count)
+			return
+		case 'g':
+			e.cy = 0
+			e.cx = 0
+			e.wantX = 0
+			return
 		}
-		return
 	}
 
 	switch motion {
@@ -847,8 +1133,20 @@ func (e *Editor) applyOperator(op rune, motion rune, count int) {
 		} else if op == 'y' {
 			e.yankToEOL()
 		}
+	case 'w':
+		if op == 'd' || op == 'c' {
+			e.deleteWord(count)
+			if op == 'c' {
+				e.mode = ModeInsert
+			}
+		} else if op == 'y' {
+			e.yankWord(count)
+		}
+
 	default:
 		e.statusMsg = fmt.Sprintf("Unsupported motion %q for %q (for now)", motion, op)
+		e.regOverrideSet = false
+		e.regOverride = 0
 	}
 }
 
@@ -901,9 +1199,6 @@ func (e *Editor) setRegister(name rune, r Register) {
 		// ignore invalid names
 		return
 	}
-
-	// unnamed always mirrors last written register content
-	e.regs.unnamed = r
 }
 
 func (e *Editor) getRegister(name rune) (Register, bool) {
@@ -930,39 +1225,39 @@ func (e *Editor) getRegister(name rune) (Register, bool) {
 }
 
 func (e *Editor) writeYank(r Register) {
-	target := e.regs.active
+	target := e.consumeRegister()
 	e.setRegister(target, r)
 	// yank register 0 gets yanks
 	e.regs.numbered[0] = r
-	// reset active back to default after op (vim-like)
-	e.regs.active = '"'
+
+	if stored, ok := e.getRegister(target); ok && stored.text != "" {
+		e.regs.unnamed = stored
+	} else {
+		e.regs.unnamed = r
+	}
 }
 
 func (e *Editor) writeDelete(r Register) {
-	target := e.regs.active
+	target := e.consumeRegister()
 	e.setRegister(target, r)
 
 	// shift 9..2
 	for i := 9; i >= 2; i-- {
 		e.regs.numbered[i] = e.regs.numbered[i-1]
 	}
-
-	// delete register 1 gets deleted
 	e.regs.numbered[1] = r
 
-	e.regs.active = '"'
+	// unnamed mirrors last delete too
+	if stored, ok := e.getRegister(target); ok && stored.text != "" {
+		e.regs.unnamed = stored
+	} else {
+		e.regs.unnamed = r
+	}
 }
 
 func (e *Editor) readPaste() (Register, bool) {
-	// if user selected a register explicitly, use it; else unnamed
-	name := e.regs.active
-	if name == '"' {
-		return e.getRegister('"')
-	}
-	r, ok := e.getRegister(name)
-	// after paste, reset active like vim
-	e.regs.active = '"'
-	return r, ok
+	name := e.consumeRegister()
+	return e.getRegister(name)
 }
 
 func (e *Editor) deleteLines(n int) {
@@ -1144,6 +1439,91 @@ func (e *Editor) yankToEOL() {
 	e.statusMsg = "yanked"
 }
 
+func (e *Editor) deleteWord(count int) {
+	pos := e.posFromCursor()
+	_, end := e.wordRangeFrom(pos, count)
+
+	if end <= pos {
+		e.statusMsg = "nothing to delete"
+		return
+	}
+
+	deleted, _ := e.buffer.Slice(pos, end)
+	e.writeDelete(Register{kind: RegCharwise, text: deleted})
+	_ = e.buffer.Delete(pos, end)
+
+	e.setCursorFromPos(pos)
+	e.wantX = e.cx
+	e.dirty = true
+	e.statusMsg = "deleted"
+}
+
+func (e *Editor) yankWord(count int) {
+	pos := e.posFromCursor()
+	_, end := e.wordRangeFrom(pos, count)
+
+	if end <= pos {
+		e.statusMsg = "nothing to yank"
+		return
+	}
+
+	yanked, _ := e.buffer.Slice(pos, end)
+	e.writeYank(Register{kind: RegCharwise, text: yanked})
+	e.statusMsg = "yanked"
+}
+
+func (e *Editor) wordRangeFrom(pos int, count int) (int, int) {
+	if count <= 0 {
+		count = 1
+	}
+
+	runes := e.textRunes()
+	if pos < 0 {
+		pos = 0
+	}
+	if pos >= len(runes) {
+		return pos, pos
+	}
+
+	start := pos
+	end := pos
+
+	for i := 0; i < count; i++ {
+		// Step 1: if we're not on a word char, skip forward to the next word char
+		for start < len(runes) && !isWordChar(runes[start]) {
+			start++
+		}
+		end = start
+
+		// Step 2: consume word chars
+		for end < len(runes) && isWordChar(runes[end]) {
+			end++
+		}
+
+		// prepare next iteration: continue from end
+		start = end
+
+		if start >= len(runes) {
+			break
+		}
+	}
+
+	// For operator usage: we want deletion to begin at original pos, not the advanced `start`.
+	// But we DO want the "end" computed above.
+	// So return (pos, end), not (start, end).
+	return pos, end
+}
+
+func (e *Editor) consumeRegister() rune {
+	if e.regOverrideSet {
+		r := e.regOverride
+		e.regOverrideSet = false
+		e.regOverride = 0
+		return r
+	}
+	return '"'
+}
+
 /*
 ====================
   Save & Helpers
@@ -1168,8 +1548,15 @@ func isRegisterName(r rune) bool {
 	if r >= '0' && r <= '9' {
 		return true
 	}
-	if r >= 'a' && r <= 'z' {
+	if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
 		return true
 	}
 	return false
+}
+
+func isWordChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') ||
+		(r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9') ||
+		r == '_'
 }
