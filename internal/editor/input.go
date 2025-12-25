@@ -207,7 +207,14 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.pendingOp = 0
 		e.pendingOpCount = 0
 
+		// Word text objects
 		if r == 'w' || r == 'W' {
+			e.applyOperatorTextObject(op, prefix, r, cnt)
+		} else if r == 'p' {
+			// Paragraph text object
+			e.applyOperatorTextObject(op, prefix, r, cnt)
+		} else if r == '"' || r == '(' || r == ')' || r == '{' || r == '}' || r == '[' || r == ']' {
+			// Paired delimiter text objects
 			e.applyOperatorTextObject(op, prefix, r, cnt)
 		} else {
 			e.statusMsg = "unsupported text object"
