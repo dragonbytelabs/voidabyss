@@ -71,6 +71,18 @@ type RepeatAction struct {
 	insertText []rune // text typed during insert mode
 }
 
+// Mark represents a position in the buffer
+type Mark struct {
+	line int
+	col  int
+}
+
+// JumpListEntry represents a position in jump history
+type JumpListEntry struct {
+	line int
+	col  int
+}
+
 type Editor struct {
 	s      tcell.Screen
 	buffer *buffer.Buffer
@@ -118,6 +130,22 @@ type Editor struct {
 	searchBuf     []rune // input buffer while typing search
 	searchMatches []int  // positions of matches in viewport (for highlighting)
 
+	// completion
+	completionActive     bool     // true when cycling through completions
+	completionCandidates []string // all word candidates
+	completionIndex      int      // current selection index
+	completionPrefix     string   // the partial word being completed
+	completionStartPos   int      // position where completion started
+
+	// marks
+	marks            map[rune]Mark // a-z marks
+	awaitingMarkSet  bool          // waiting for mark name after 'm'
+	awaitingMarkJump rune          // waiting for mark name after ' or `
+
+	// jump list
+	jumpList      []JumpListEntry
+	jumpListIndex int // current position in jump list (-1 = at latest position)
+
 	// popup UI
 	popupActive bool
 	popupTitle  string
@@ -155,6 +183,9 @@ func newEditorFromFile(path string) (*Editor, error) {
 		filename: abs,
 	}
 	ed.regs.named = make(map[rune]Register)
+	ed.marks = make(map[rune]Mark)
+	ed.jumpList = make([]JumpListEntry, 0, 100)
+	ed.jumpListIndex = -1
 
 	if readErr != nil && !os.IsNotExist(readErr) {
 		ed.statusMsg = "read failed: " + readErr.Error()
@@ -186,6 +217,9 @@ func newEditorFromProject(path string) (*Editor, error) {
 		filename: abs,
 	}
 	ed.regs.named = make(map[rune]Register)
+	ed.marks = make(map[rune]Mark)
+	ed.jumpList = make([]JumpListEntry, 0, 100)
+	ed.jumpListIndex = -1
 	return ed, nil
 }
 

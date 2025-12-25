@@ -37,6 +37,83 @@ func isCtrlR(k *tcell.EventKey) bool {
 	return false
 }
 
+func isCtrlN(k *tcell.EventKey) bool {
+	if k == nil {
+		return false
+	}
+	// Ctrl+N is ASCII 0x0E (14)
+	if k.Key() == tcell.Key(0x0E) || k.Key() == tcell.KeyCtrlN {
+		return true
+	}
+	if k.Key() == tcell.KeyRune && (k.Modifiers()&tcell.ModCtrl) != 0 {
+		if k.Rune() == 'n' || k.Rune() == 'N' {
+			return true
+		}
+	}
+	if k.Key() == tcell.KeyRune && k.Rune() == rune(0x0E) {
+		return true
+	}
+	return false
+}
+
+func isCtrlP(k *tcell.EventKey) bool {
+	if k == nil {
+		return false
+	}
+	// Ctrl+P is ASCII 0x10 (16)
+	if k.Key() == tcell.Key(0x10) || k.Key() == tcell.KeyCtrlP {
+		return true
+	}
+	if k.Key() == tcell.KeyRune && (k.Modifiers()&tcell.ModCtrl) != 0 {
+		if k.Rune() == 'p' || k.Rune() == 'P' {
+			return true
+		}
+	}
+	if k.Key() == tcell.KeyRune && k.Rune() == rune(0x10) {
+		return true
+	}
+	return false
+}
+
+func isCtrlO(k *tcell.EventKey) bool {
+	if k == nil {
+		return false
+	}
+	// Ctrl+O is ASCII 0x0F (15)
+	if k.Key() == tcell.Key(0x0F) || k.Key() == tcell.KeyCtrlO {
+		return true
+	}
+	if k.Key() == tcell.KeyRune && (k.Modifiers()&tcell.ModCtrl) != 0 {
+		if k.Rune() == 'o' || k.Rune() == 'O' {
+			return true
+		}
+	}
+	if k.Key() == tcell.KeyRune && k.Rune() == rune(0x0F) {
+		return true
+	}
+	return false
+}
+
+func isCtrlI(k *tcell.EventKey) bool {
+	if k == nil {
+		return false
+	}
+	// Ctrl+I is ASCII 0x09 (9) - same as Tab
+	// We need to be careful here as Tab is commonly used
+	if k.Key() == tcell.Key(0x09) || k.Key() == tcell.KeyCtrlI {
+		return true
+	}
+	if k.Key() == tcell.KeyRune && (k.Modifiers()&tcell.ModCtrl) != 0 {
+		if k.Rune() == 'i' || k.Rune() == 'I' {
+			return true
+		}
+	}
+	if k.Key() == tcell.KeyRune && k.Rune() == rune(0x09) {
+		return true
+	}
+	return false
+}
+
 func clamp(v, lo, hi int) int {
 	if v < lo {
 		return lo

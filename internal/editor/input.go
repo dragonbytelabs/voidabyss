@@ -9,7 +9,25 @@ import (
 )
 
 func (e *Editor) handleKey(k *tcell.EventKey) bool {
-	if e.popupActive {
+	// Allow completion-related keys to work even when popup is active
+	if e.popupActive && e.mode == ModeInsert && e.completionActive {
+		// Allow Ctrl-N/Ctrl-P for cycling
+		if isCtrlN(k) || isCtrlP(k) {
+			e.handleInsert(k)
+			return false
+		}
+		// Allow Escape to cancel completion - DON'T let popup handler intercept
+		if k.Key() == tcell.KeyEsc {
+			// Fall through to normal mode handling below
+		} else if k.Key() == tcell.KeyRune {
+			// Allow typing to cancel completion and insert the character
+			e.handleInsert(k)
+			return false
+		} else {
+			// Other keys go through popup handler
+		}
+	} else if e.popupActive {
+		// Normal popup handling when completion is NOT active
 		switch k.Key() {
 		case tcell.KeyEsc, tcell.KeyEnter:
 			e.closePopup()
@@ -40,6 +58,18 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 		return false
 	}
 
+	// Ctrl+O jump back
+	if e.mode == ModeNormal && isCtrlO(k) {
+		e.jumpBack()
+		return false
+	}
+
+	// Ctrl+I jump forward
+	if e.mode == ModeNormal && isCtrlI(k) {
+		e.jumpForward()
+		return false
+	}
+
 	if k.Key() == tcell.KeyEsc {
 		if e.mode == ModeVisual {
 			e.visualExit()
@@ -59,6 +89,10 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 			// Save captured text for dot-repeat
 			if e.last.kind == RepeatInsert {
 				e.last.insertText = append([]rune{}, e.insertCapture...)
+			}
+			// Cancel completion if active
+			if e.completionActive {
+				e.cancelCompletion()
 			}
 		}
 
@@ -130,6 +164,25 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 	e.statusMsg = ""
 	r := k.Rune()
 
+	// mark setting (m)
+	if e.awaitingMarkSet {
+		e.setMark(r)
+		e.awaitingMarkSet = false
+		return
+	}
+
+	// mark jump (' or `)
+	if e.awaitingMarkJump != 0 {
+		jumpType := e.awaitingMarkJump
+		e.awaitingMarkJump = 0
+		if jumpType == '\'' {
+			e.jumpToMarkLine(r)
+		} else if jumpType == '`' {
+			e.jumpToMarkExact(r)
+		}
+		return
+	}
+
 	// register selection
 	if e.awaitingRegister {
 		if isRegisterName(r) {
@@ -193,6 +246,8 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		// special case: gg as motion within operator (e.g., dgg)
 		if op == 'g' && r == 'g' {
 			// standalone gg: go to top
+			// Add to jump list before big jump
+			e.addToJumpList(e.cy, e.cx)
 			e.cy = 0
 			e.cx = 0
 			e.wantX = 0
@@ -328,9 +383,23 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.wantX = e.cx
 
 	case 'G':
+		// Add to jump list before big jump
+		e.addToJumpList(e.cy, e.cx)
 		e.cy = e.lineCount() - 1
 		e.cx = 0
 		e.wantX = 0
+
+	case 'm':
+		// Set mark - wait for next character
+		e.awaitingMarkSet = true
+
+	case '\'':
+		// Line jump to mark - wait for next character
+		e.awaitingMarkJump = '\''
+
+	case '`':
+		// Exact jump to mark - wait for next character
+		e.awaitingMarkJump = '`'
 
 	case '{':
 		e.moveParagraphBackward(e.consumeCountOr1())
@@ -428,6 +497,21 @@ func (e *Editor) handleVisual(k *tcell.EventKey) {
 }
 
 func (e *Editor) handleInsert(k *tcell.EventKey) {
+	// Handle completion keys first
+	if isCtrlN(k) {
+		e.cycleCompletion(true)
+		return
+	}
+	if isCtrlP(k) {
+		e.cycleCompletion(false)
+		return
+	}
+
+	// Any other key cancels completion (but still processes the key)
+	if e.completionActive {
+		e.cancelCompletion()
+	}
+
 	switch k.Key() {
 	case tcell.KeyRune:
 		e.insertRune(k.Rune())

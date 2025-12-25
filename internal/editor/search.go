@@ -9,6 +9,9 @@ func (e *Editor) searchNext(forward bool, skipCurrent bool) {
 		return
 	}
 
+	// Add current position to jump list before jumping to search result
+	e.addToJumpList(e.cy, e.cx)
+
 	text := e.buffer.String()
 	query := e.searchQuery
 
