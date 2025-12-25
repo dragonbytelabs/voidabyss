@@ -6,6 +6,13 @@ import (
 )
 
 func (e *Editor) exec(cmd string) bool {
+	// Handle :e filename
+	if len(cmd) > 2 && cmd[0:2] == "e " {
+		filename := cmd[2:]
+		e.openFile(filename)
+		return false
+	}
+
 	switch cmd {
 	case "q":
 		if e.dirty {
@@ -20,6 +27,12 @@ func (e *Editor) exec(cmd string) bool {
 	case "wq":
 		e.save()
 		return true
+	case "bn", "bnext":
+		e.nextBuffer()
+	case "bp", "bprev", "bprevious":
+		e.prevBuffer()
+	case "ls", "buffers":
+		e.listBuffers()
 	case "reg", "registers":
 		e.popupFixedH = 10
 		e.openPopup("REGISTERS", e.formatRegisters())

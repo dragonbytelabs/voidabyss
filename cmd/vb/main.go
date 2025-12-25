@@ -34,9 +34,8 @@ func main() {
 		printHelp()
 
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", args[0])
-		printHelp()
-		os.Exit(1)
+		// Treat as file path
+		runEditor(args[0])
 	}
 }
 

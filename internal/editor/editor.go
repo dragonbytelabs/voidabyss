@@ -84,24 +84,28 @@ type JumpListEntry struct {
 }
 
 type Editor struct {
-	s      tcell.Screen
-	buffer *buffer.Buffer
+	s tcell.Screen
 
-	// cursor in (line, col) where col is rune offset within the line
-	cx, cy int
+	// multiple buffers
+	buffers       []*BufferView
+	currentBuffer int
 
-	// viewport offsets in (line, col)
-	rowOffset int
-	colOffset int
+	// Current buffer state (synced when switching buffers)
+	buffer               *buffer.Buffer
+	filename             string
+	dirty                bool
+	cx, cy               int
+	rowOffset, colOffset int
+	wantX                int
+	marks                map[rune]Mark
+	jumpList             []JumpListEntry
+	jumpListIndex        int
 
-	mode  Mode
-	wantX int
+	mode Mode
 
 	// command mode
 	cmdBuf    []rune
 	statusMsg string
-	filename  string
-	dirty     bool
 
 	// operator pending
 	pendingCount   int
@@ -109,7 +113,7 @@ type Editor struct {
 	pendingOpCount int  // captured count at time op was entered
 	pendingTextObj rune // 'i' or 'a' when waiting for iw/aw etc
 
-	// registers
+	// registers (shared across all buffers)
 	regs             Registers
 	awaitingRegister bool
 	regOverride      rune
@@ -137,14 +141,9 @@ type Editor struct {
 	completionPrefix     string   // the partial word being completed
 	completionStartPos   int      // position where completion started
 
-	// marks
-	marks            map[rune]Mark // a-z marks
-	awaitingMarkSet  bool          // waiting for mark name after 'm'
-	awaitingMarkJump rune          // waiting for mark name after ' or `
-
-	// jump list
-	jumpList      []JumpListEntry
-	jumpListIndex int // current position in jump list (-1 = at latest position)
+	// marks - awaitingMarkSet/Jump for current operation
+	awaitingMarkSet  bool // waiting for mark name after 'm'
+	awaitingMarkJump rune // waiting for mark name after ' or `
 
 	// configuration
 	indentWidth int // number of spaces for indentation
@@ -178,18 +177,19 @@ func newEditorFromFile(path string) (*Editor, error) {
 	if err := s.Init(); err != nil {
 		return nil, err
 	}
+	s.Sync()
+
+	bufView := NewBufferView(txt, abs)
 
 	ed := &Editor{
-		s:           s,
-		buffer:      buffer.NewFromString(txt),
-		mode:        ModeNormal,
-		filename:    abs,
-		indentWidth: 4,
+		s:             s,
+		buffers:       []*BufferView{bufView},
+		currentBuffer: 0,
+		mode:          ModeNormal,
+		indentWidth:   4,
 	}
 	ed.regs.named = make(map[rune]Register)
-	ed.marks = make(map[rune]Mark)
-	ed.jumpList = make([]JumpListEntry, 0, 100)
-	ed.jumpListIndex = -1
+	ed.syncFromBuffer()
 
 	if readErr != nil && !os.IsNotExist(readErr) {
 		ed.statusMsg = "read failed: " + readErr.Error()
@@ -213,6 +213,7 @@ func newEditorFromProject(path string) (*Editor, error) {
 	if err := s.Init(); err != nil {
 		return nil, err
 	}
+	s.Sync()
 
 	ed := &Editor{
 		s:           s,
@@ -248,5 +249,47 @@ func (e *Editor) run() error {
 		case *tcell.EventResize:
 			e.s.Sync()
 		}
+	}
+}
+
+// buf returns the current BufferView
+func (e *Editor) buf() *BufferView {
+	if len(e.buffers) == 0 || e.currentBuffer < 0 || e.currentBuffer >= len(e.buffers) {
+		return nil
+	}
+	return e.buffers[e.currentBuffer]
+}
+
+// syncToBuffer copies editor state to current buffer before switching
+func (e *Editor) syncToBuffer() {
+	if b := e.buf(); b != nil {
+		b.buffer = e.buffer
+		b.filename = e.filename
+		b.dirty = e.dirty
+		b.cx = e.cx
+		b.cy = e.cy
+		b.rowOffset = e.rowOffset
+		b.colOffset = e.colOffset
+		b.wantX = e.wantX
+		b.marks = e.marks
+		b.jumpList = e.jumpList
+		b.jumpListIndex = e.jumpListIndex
+	}
+}
+
+// syncFromBuffer copies current buffer state to editor after switching
+func (e *Editor) syncFromBuffer() {
+	if b := e.buf(); b != nil {
+		e.buffer = b.buffer
+		e.filename = b.filename
+		e.dirty = b.dirty
+		e.cx = b.cx
+		e.cy = b.cy
+		e.rowOffset = b.rowOffset
+		e.colOffset = b.colOffset
+		e.wantX = b.wantX
+		e.marks = b.marks
+		e.jumpList = b.jumpList
+		e.jumpListIndex = b.jumpListIndex
 	}
 }
