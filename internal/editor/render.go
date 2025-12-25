@@ -12,6 +12,7 @@ func (e *Editor) draw() {
 	w, h := e.s.Size()
 	style := tcell.StyleDefault
 	highlightStyle := tcell.StyleDefault.Background(tcell.ColorYellow).Foreground(tcell.ColorBlack)
+	visualStyle := tcell.StyleDefault.Background(tcell.ColorBlue).Foreground(tcell.ColorWhite)
 
 	for y := 0; y < h-1; y++ {
 		lineIndex := e.rowOffset + y
@@ -30,8 +31,11 @@ func (e *Editor) draw() {
 			absPos := lineStartPos + start + x
 			cellStyle := style
 
-			// Check if this position is in a search match
-			if e.isSearchMatch(absPos) {
+			// Check if this position is in visual selection (takes priority)
+			if e.isInVisualSelection(absPos) {
+				cellStyle = visualStyle
+			} else if e.isSearchMatch(absPos) {
+				// Check if this position is in a search match
 				cellStyle = highlightStyle
 			}
 

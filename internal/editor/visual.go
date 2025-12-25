@@ -72,3 +72,13 @@ func (e *Editor) visualGetLineRange() (startLine, endLine int) {
 	endLine = e.lineIndexForPos(b)
 	return startLine, endLine
 }
+
+// isInVisualSelection returns true if the given position is within the visual selection
+func (e *Editor) isInVisualSelection(pos int) bool {
+	if !e.visualActive {
+		return false
+	}
+
+	start, end, _ := e.visualRange()
+	return pos >= start && pos < end
+}
