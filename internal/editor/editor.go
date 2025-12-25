@@ -154,6 +154,12 @@ type Editor struct {
 	popupLines  []string
 	popupScroll int
 	popupFixedH int
+
+	// file tree
+	fileTree       *FileTree
+	treeOpen       bool
+	treePanelWidth int
+	focusTree      bool // true if tree has focus, false if buffer has focus
 }
 
 func newEditorFromFile(path string) (*Editor, error) {

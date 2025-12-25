@@ -9,6 +9,27 @@ import (
 )
 
 func (e *Editor) handleKey(k *tcell.EventKey) bool {
+	// Handle Ctrl+W to toggle focus between tree and buffer
+	if e.treeOpen && k.Key() == tcell.KeyCtrlW {
+		e.focusTree = !e.focusTree
+		if e.focusTree {
+			e.statusMsg = "focus: file tree"
+		} else {
+			e.statusMsg = "focus: buffer"
+		}
+		return false
+	}
+
+	// If tree has focus and is open, handle tree input
+	if e.treeOpen && e.focusTree {
+		if k.Key() == tcell.KeyRune {
+			e.handleTreeInput(k.Rune())
+		} else if k.Key() == tcell.KeyEnter {
+			e.handleTreeInput('\n')
+		}
+		return false
+	}
+
 	// Allow completion-related keys to work even when popup is active
 	if e.popupActive && e.mode == ModeInsert && e.completionActive {
 		// Allow Ctrl-N/Ctrl-P for cycling

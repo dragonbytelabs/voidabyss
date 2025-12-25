@@ -33,6 +33,8 @@ func (e *Editor) exec(cmd string) bool {
 		e.prevBuffer()
 	case "ls", "buffers":
 		e.listBuffers()
+	case "Explore", "Ex":
+		e.toggleFileTree()
 	case "reg", "registers":
 		e.popupFixedH = 10
 		e.openPopup("REGISTERS", e.formatRegisters())

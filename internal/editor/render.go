@@ -13,7 +13,57 @@ func (e *Editor) draw() {
 	style := tcell.StyleDefault
 	highlightStyle := tcell.StyleDefault.Background(tcell.ColorYellow).Foreground(tcell.ColorBlack)
 	visualStyle := tcell.StyleDefault.Background(tcell.ColorBlue).Foreground(tcell.ColorWhite)
+	treeStyle := tcell.StyleDefault.Foreground(tcell.ColorGreen)
+	treeCursorStyle := tcell.StyleDefault.Background(tcell.ColorDarkGreen).Foreground(tcell.ColorWhite)
+	treeBorderStyle := tcell.StyleDefault.Foreground(tcell.ColorGray)
 
+	contentStartX := 0
+	contentWidth := w
+
+	// Draw file tree if open
+	if e.treeOpen && e.fileTree != nil {
+		treeWidth := e.treePanelWidth
+		if treeWidth > w-10 {
+			treeWidth = w - 10
+		}
+		if treeWidth < 20 {
+			treeWidth = 20
+		}
+
+		lines := e.fileTree.getDisplayLines()
+		for y := 0; y < h-1 && y < len(lines); y++ {
+			lineRunes := []rune(lines[y])
+			isCursor := y < len(lines) && len(lineRunes) > 0 && lineRunes[0] == '>'
+
+			for x := 0; x < treeWidth && x < len(lineRunes); x++ {
+				cellStyle := treeStyle
+				if isCursor {
+					cellStyle = treeCursorStyle
+				}
+				e.s.SetContent(x, y, lineRunes[x], nil, cellStyle)
+			}
+			// Clear rest of tree panel width
+			for x := len(lineRunes); x < treeWidth; x++ {
+				e.s.SetContent(x, y, ' ', nil, style)
+			}
+		}
+		// Clear any remaining lines in tree panel
+		for y := len(lines); y < h-1; y++ {
+			for x := 0; x < treeWidth; x++ {
+				e.s.SetContent(x, y, ' ', nil, style)
+			}
+		}
+
+		// Draw vertical border
+		for y := 0; y < h-1; y++ {
+			e.s.SetContent(treeWidth, y, '│', nil, treeBorderStyle)
+		}
+
+		contentStartX = treeWidth + 1
+		contentWidth = w - contentStartX
+	}
+
+	// Draw buffer content
 	for y := 0; y < h-1; y++ {
 		lineIndex := e.rowOffset + y
 		if lineIndex >= e.lineCount() {
@@ -27,7 +77,7 @@ func (e *Editor) draw() {
 		// Calculate absolute position for highlight matching
 		lineStartPos := e.lineStartPos(lineIndex)
 
-		for x := 0; x < w && x < len(visible); x++ {
+		for x := 0; x < contentWidth && x < len(visible); x++ {
 			absPos := lineStartPos + start + x
 			cellStyle := style
 
@@ -39,7 +89,7 @@ func (e *Editor) draw() {
 				cellStyle = highlightStyle
 			}
 
-			e.s.SetContent(x, y, visible[x], nil, cellStyle)
+			e.s.SetContent(contentStartX+x, y, visible[x], nil, cellStyle)
 		}
 	}
 
@@ -49,15 +99,21 @@ func (e *Editor) draw() {
 		e.drawPopup(w, h)
 	}
 
-	screenX := e.cx - e.colOffset
+	// Position cursor
+	screenX := e.cx - e.colOffset + contentStartX
 	screenY := e.cy - e.rowOffset
-	screenX = max(0, screenX)
+	screenX = max(contentStartX, screenX)
 	screenY = max(0, screenY)
 	if screenY > h-2 {
 		screenY = h - 2
 	}
 
-	e.s.ShowCursor(screenX, screenY)
+	// Only show cursor if buffer has focus
+	if !e.focusTree {
+		e.s.ShowCursor(screenX, screenY)
+	} else {
+		e.s.HideCursor()
+	}
 	e.s.Show()
 }
 
