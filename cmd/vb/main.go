@@ -68,7 +68,7 @@ func runEditor(path string) {
 }
 
 func printHelp() {
-	fmt.Println(`
+	fmt.Print(`
 VoidAbyss — a minimal, modal environment for deep work.
 
 Usage:

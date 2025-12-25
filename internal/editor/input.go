@@ -50,6 +50,10 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 		// End undo group when leaving insert mode
 		if e.mode == ModeInsert {
 			e.buffer.EndUndoGroup()
+			// Save captured text for dot-repeat
+			if e.last.kind == RepeatInsert {
+				e.last.insertText = append([]rune{}, e.insertCapture...)
+			}
 		}
 
 		e.mode = ModeNormal
@@ -240,15 +244,21 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.pasteBefore(n)
 
 	case 'i':
+		e.insertCapture = nil
+		e.last = RepeatAction{kind: RepeatInsert, insertCmd: 'i'}
 		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 	case 'a':
 		e.moveRight(1)
+		e.insertCapture = nil
+		e.last = RepeatAction{kind: RepeatInsert, insertCmd: 'a'}
 		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 	case 'A':
 		e.cx = e.lineLen(e.cy)
 		e.wantX = e.cx
+		e.insertCapture = nil
+		e.last = RepeatAction{kind: RepeatInsert, insertCmd: 'A'}
 		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 
@@ -261,10 +271,14 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 
 	case 'o':
 		e.openBelow()
+		e.insertCapture = nil
+		e.last = RepeatAction{kind: RepeatInsert, insertCmd: 'o'}
 		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 	case 'O':
 		e.openAbove()
+		e.insertCapture = nil
+		e.last = RepeatAction{kind: RepeatInsert, insertCmd: 'O'}
 		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 
@@ -395,10 +409,16 @@ func (e *Editor) handleInsert(k *tcell.EventKey) {
 	switch k.Key() {
 	case tcell.KeyRune:
 		e.insertRune(k.Rune())
+		e.insertCapture = append(e.insertCapture, k.Rune())
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		e.backspace()
+		// Remove last char from capture if there is one
+		if len(e.insertCapture) > 0 {
+			e.insertCapture = e.insertCapture[:len(e.insertCapture)-1]
+		}
 	case tcell.KeyEnter:
 		e.newline()
+		e.insertCapture = append(e.insertCapture, '\n')
 	case tcell.KeyUp:
 		e.moveUp(1)
 	case tcell.KeyDown:

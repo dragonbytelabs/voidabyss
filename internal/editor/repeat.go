@@ -27,5 +27,44 @@ func (e *Editor) repeatLast() {
 		for i := 0; i < max(1, e.last.count); i++ {
 			e.deleteAtCursor()
 		}
+	case RepeatInsert:
+		// Replay insert mode: execute the insert command, type the text, exit
+		e.repeatInsertMode()
 	}
+}
+
+func (e *Editor) repeatInsertMode() {
+	if e.last.insertCmd == 0 {
+		return
+	}
+
+	// Execute the insert command to position cursor correctly
+	switch e.last.insertCmd {
+	case 'i':
+		// Insert at current position - no movement needed
+	case 'a':
+		e.moveRight(1)
+	case 'A':
+		e.cx = e.lineLen(e.cy)
+		e.wantX = e.cx
+	case 'o':
+		e.openBelow()
+	case 'O':
+		e.openAbove()
+	}
+
+	// Start undo group for the repeated insert
+	e.buffer.BeginUndoGroup()
+
+	// Type the captured text
+	for _, r := range e.last.insertText {
+		if r == '\n' {
+			e.newline()
+		} else {
+			e.insertRune(r)
+		}
+	}
+
+	// End undo group
+	e.buffer.EndUndoGroup()
 }

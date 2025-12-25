@@ -53,6 +53,7 @@ const (
 	RepeatPasteAfter
 	RepeatPasteBefore
 	RepeatDeleteChar // x
+	RepeatInsert     // i, a, A, o, O with text typed
 )
 
 type RepeatAction struct {
@@ -64,6 +65,9 @@ type RepeatAction struct {
 	// text object (iw/aw/iW/aW)
 	textObjPrefix rune // 'i' or 'a'
 	textObjUnit   rune // 'w' or 'W'
+	// insert mode tracking
+	insertCmd  rune   // 'i', 'a', 'A', 'o', 'O'
+	insertText []rune // text typed during insert mode
 }
 
 type Editor struct {
@@ -104,7 +108,8 @@ type Editor struct {
 	visualActive bool
 
 	// dot repeat
-	last RepeatAction
+	last          RepeatAction
+	insertCapture []rune // text typed during current insert session
 
 	// popup UI
 	popupActive bool
