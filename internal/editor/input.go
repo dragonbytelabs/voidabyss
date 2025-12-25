@@ -47,6 +47,12 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 			return false
 		}
 
+		if e.mode == ModeSearch {
+			e.mode = ModeNormal
+			e.searchBuf = nil
+			return false
+		}
+
 		// End undo group when leaving insert mode
 		if e.mode == ModeInsert {
 			e.buffer.EndUndoGroup()
@@ -76,6 +82,8 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 		return e.handleCommand(k)
 	case ModeVisual:
 		e.handleVisual(k)
+	case ModeSearch:
+		return e.handleSearch(k)
 	}
 	return false
 }
@@ -288,6 +296,20 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.mode = ModeCommand
 		e.cmdBuf = nil
 
+	case '/':
+		e.mode = ModeSearch
+		e.searchBuf = nil
+		e.searchForward = true
+	case '?':
+		e.mode = ModeSearch
+		e.searchBuf = nil
+		e.searchForward = false
+
+	case 'n':
+		e.searchNext(e.searchForward, true)
+	case 'N':
+		e.searchNext(!e.searchForward, true)
+
 	case '$':
 		e.cx = e.lineLen(e.cy)
 		e.wantX = e.cx
@@ -443,6 +465,29 @@ func (e *Editor) handleCommand(k *tcell.EventKey) bool {
 		}
 	case tcell.KeyRune:
 		e.cmdBuf = append(e.cmdBuf, k.Rune())
+	}
+	return false
+}
+
+func (e *Editor) handleSearch(k *tcell.EventKey) bool {
+	switch k.Key() {
+	case tcell.KeyEnter:
+		query := string(e.searchBuf)
+		e.searchBuf = nil
+		e.mode = ModeNormal
+		if query != "" {
+			e.searchQuery = query
+			e.searchNext(e.searchForward, false)
+		}
+		return false
+	case tcell.KeyBackspace, tcell.KeyBackspace2:
+		if len(e.searchBuf) > 0 {
+			e.searchBuf = e.searchBuf[:len(e.searchBuf)-1]
+		}
+		return false
+	case tcell.KeyRune:
+		e.searchBuf = append(e.searchBuf, k.Rune())
+		return false
 	}
 	return false
 }

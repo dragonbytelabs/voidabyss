@@ -16,6 +16,7 @@ const (
 	ModeInsert
 	ModeCommand
 	ModeVisual
+	ModeSearch
 )
 
 type RegisterKind int
@@ -110,6 +111,12 @@ type Editor struct {
 	// dot repeat
 	last          RepeatAction
 	insertCapture []rune // text typed during current insert session
+
+	// search
+	searchQuery   string // current search pattern
+	searchForward bool   // true for /, false for ?
+	searchBuf     []rune // input buffer while typing search
+	searchMatches []int  // positions of matches in viewport (for highlighting)
 
 	// popup UI
 	popupActive bool

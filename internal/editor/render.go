@@ -11,6 +11,7 @@ func (e *Editor) draw() {
 	e.s.Clear()
 	w, h := e.s.Size()
 	style := tcell.StyleDefault
+	highlightStyle := tcell.StyleDefault.Background(tcell.ColorYellow).Foreground(tcell.ColorBlack)
 
 	for y := 0; y < h-1; y++ {
 		lineIndex := e.rowOffset + y
@@ -21,8 +22,20 @@ func (e *Editor) draw() {
 		runes := []rune(e.getLine(lineIndex))
 		start := min(e.colOffset, len(runes))
 		visible := runes[start:]
+
+		// Calculate absolute position for highlight matching
+		lineStartPos := e.lineStartPos(lineIndex)
+
 		for x := 0; x < w && x < len(visible); x++ {
-			e.s.SetContent(x, y, visible[x], nil, style)
+			absPos := lineStartPos + start + x
+			cellStyle := style
+
+			// Check if this position is in a search match
+			if e.isSearchMatch(absPos) {
+				cellStyle = highlightStyle
+			}
+
+			e.s.SetContent(x, y, visible[x], nil, cellStyle)
 		}
 	}
 
@@ -50,6 +63,7 @@ func (e *Editor) drawStatus(w, h int) {
 		ModeInsert:  "INSERT",
 		ModeCommand: "COMMAND",
 		ModeVisual:  "VISUAL",
+		ModeSearch:  "SEARCH",
 	}[e.mode]
 
 	regCh := rune('"')
@@ -76,6 +90,13 @@ func (e *Editor) drawStatus(w, h int) {
 	}
 	if e.mode == ModeCommand {
 		msg = ":" + string(e.cmdBuf)
+	}
+	if e.mode == ModeSearch {
+		prefix := "/"
+		if !e.searchForward {
+			prefix = "?"
+		}
+		msg = prefix + string(e.searchBuf)
 	}
 
 	bar := left
