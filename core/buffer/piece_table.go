@@ -25,6 +25,10 @@ type Buffer struct {
 
 	undo []op
 	redo []op
+
+	// For grouping multiple operations into a single undo
+	inGroup  bool
+	groupOps []op
 }
 
 // NewFromString creates a buffer where the initial contents live in "original".
@@ -102,13 +106,19 @@ func (b *Buffer) Insert(pos int, text string) error {
 	if text == "" {
 		return nil
 	}
-	op := insertOp{pos: pos, text: []rune(text)}
-	inv, err := b.apply(op)
+	operation := insertOp{pos: pos, text: []rune(text)}
+	inv, err := b.apply(operation)
 	if err != nil {
 		return err
 	}
-	b.undo = append(b.undo, inv)
-	b.redo = b.redo[:0]
+
+	if b.inGroup {
+		// Append operations in the order they happen
+		b.groupOps = append(b.groupOps, inv)
+	} else {
+		b.undo = append(b.undo, inv)
+		b.redo = b.redo[:0]
+	}
 	return nil
 }
 
@@ -126,8 +136,8 @@ func (b *Buffer) Delete(start, end int) error {
 		return err
 	}
 
-	op := deleteOp{start: start, end: end}
-	inv, err := b.apply(op)
+	operation := deleteOp{start: start, end: end}
+	inv, err := b.apply(operation)
 	if err != nil {
 		return err
 	}
@@ -139,8 +149,13 @@ func (b *Buffer) Delete(start, end int) error {
 		inv = ins
 	}
 
-	b.undo = append(b.undo, inv)
-	b.redo = b.redo[:0]
+	if b.inGroup {
+		// Append operations in the order they happen
+		b.groupOps = append(b.groupOps, inv)
+	} else {
+		b.undo = append(b.undo, inv)
+		b.redo = b.redo[:0]
+	}
 	return nil
 }
 
@@ -173,6 +188,34 @@ func (b *Buffer) Redo() bool {
 	}
 	b.undo = append(b.undo, inv)
 	return true
+}
+
+// BeginUndoGroup starts grouping operations into a single undo
+func (b *Buffer) BeginUndoGroup() {
+	b.inGroup = true
+	b.groupOps = nil
+}
+
+// EndUndoGroup ends grouping and adds the group to undo stack
+func (b *Buffer) EndUndoGroup() {
+	if !b.inGroup {
+		return
+	}
+	b.inGroup = false
+
+	if len(b.groupOps) == 0 {
+		return
+	}
+
+	if len(b.groupOps) == 1 {
+		// Single operation, no need to wrap
+		b.undo = append(b.undo, b.groupOps[0])
+	} else {
+		// Multiple operations - store them in the order they happened
+		b.undo = append(b.undo, groupOp{ops: b.groupOps})
+	}
+	b.redo = b.redo[:0]
+	b.groupOps = nil
 }
 
 // ----- ops -----
@@ -233,6 +276,50 @@ func (o deleteOp) applyTo(b *Buffer) (op, error) {
 
 	// inverse is insert, but caller supplies deleted payload for accurate undo
 	return insertOp{pos: o.start, text: nil}, nil
+}
+
+// groupOp groups multiple operations into one undo/redo unit
+type groupOp struct {
+	ops []op
+}
+
+func (o groupOp) applyTo(b *Buffer) (op, error) {
+	if len(o.ops) == 0 {
+		return groupOp{ops: nil}, nil
+	}
+
+	// Operations are stored in the order they happened
+	// Apply them in REVERSE order (newest first) to undo
+	// Collect inverses in reverse order too (so redo applies them correctly)
+	inverses := make([]op, 0, len(o.ops))
+	for i := len(o.ops) - 1; i >= 0; i-- {
+		// If this is a deleteOp, we need to capture the text before deleting
+		var deletedText string
+		if delOp, ok := o.ops[i].(deleteOp); ok {
+			text, err := b.Slice(delOp.start, delOp.end)
+			if err != nil {
+				return nil, err
+			}
+			deletedText = text
+		}
+
+		inv, err := b.apply(o.ops[i])
+		if err != nil {
+			return nil, err
+		}
+
+		// Fill in text for insertOp inverses (from deleteOps)
+		if deletedText != "" {
+			if ins, ok := inv.(insertOp); ok {
+				ins.text = []rune(deletedText)
+				inv = ins
+			}
+		}
+
+		inverses = append(inverses, inv)
+	}
+
+	return groupOp{ops: inverses}, nil
 }
 
 // ----- piece table internals -----

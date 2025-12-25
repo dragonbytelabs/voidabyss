@@ -19,11 +19,11 @@ func TestPasteLinewiseBelow(t *testing.T) {
 	e := newTestEditor(t, "one\ntwo")
 	e.cy, e.cx = 0, 0
 
-	e.regs.unnamed = Register{kind: RegLinewise, text: "HELLO"}
+	// Linewise content should include the newline
+	e.regs.unnamed = Register{kind: RegLinewise, text: "HELLO\n"}
 
 	e.pasteAfter()
-	if got := e.buffer.String(); got != "one\nHELLO\ntwo" && got != "one\nHELLO\ntwo\n" {
-		// allow either depending on your exact newline behavior
+	if got := e.buffer.String(); got != "one\nHELLO\ntwo" {
 		t.Fatalf("unexpected result: %q", got)
 	}
 }

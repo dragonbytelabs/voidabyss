@@ -26,8 +26,9 @@ func TestYankLines_yy(t *testing.T) {
 
 	e.applyOperatorMotion('y', 'y', 1) // yy
 
-	if e.regs.numbered[0].text != "one" {
-		t.Fatalf("expected reg0 yanked 'one' got %q", e.regs.numbered[0].text)
+	// Linewise yank includes the newline
+	if e.regs.numbered[0].text != "one\n" {
+		t.Fatalf("expected reg0 yanked 'one\\n' got %q", e.regs.numbered[0].text)
 	}
 	if e.regs.numbered[0].kind != RegLinewise {
 		t.Fatalf("expected linewise yank")

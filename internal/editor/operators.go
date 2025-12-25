@@ -20,6 +20,7 @@ func (e *Editor) applyOperatorMotion(op rune, motion rune, count int) {
 			return
 		case 'c':
 			e.deleteLines(count)
+			e.buffer.BeginUndoGroup()
 			e.mode = ModeInsert
 			return
 		case 'y':
@@ -36,6 +37,7 @@ func (e *Editor) applyOperatorMotion(op rune, motion rune, count int) {
 		if op == 'd' || op == 'c' {
 			e.deleteToBOL()
 			if op == 'c' {
+				e.buffer.BeginUndoGroup()
 				e.mode = ModeInsert
 			}
 			return
@@ -48,6 +50,7 @@ func (e *Editor) applyOperatorMotion(op rune, motion rune, count int) {
 		if op == 'd' || op == 'c' {
 			e.deleteToEOL()
 			if op == 'c' {
+				e.buffer.BeginUndoGroup()
 				e.mode = ModeInsert
 			}
 			return
@@ -60,6 +63,7 @@ func (e *Editor) applyOperatorMotion(op rune, motion rune, count int) {
 		if op == 'd' || op == 'c' {
 			e.deleteByWordMotion(count, motion == 'W')
 			if op == 'c' {
+				e.buffer.BeginUndoGroup()
 				e.mode = ModeInsert
 			}
 			return
@@ -72,6 +76,7 @@ func (e *Editor) applyOperatorMotion(op rune, motion rune, count int) {
 		if op == 'd' || op == 'c' {
 			e.deleteByBackWordMotion(count, motion == 'B')
 			if op == 'c' {
+				e.buffer.BeginUndoGroup()
 				e.mode = ModeInsert
 			}
 			return
@@ -84,6 +89,7 @@ func (e *Editor) applyOperatorMotion(op rune, motion rune, count int) {
 		if op == 'd' || op == 'c' {
 			e.deleteByEndWordMotion(count, motion == 'E')
 			if op == 'c' {
+				e.buffer.BeginUndoGroup()
 				e.mode = ModeInsert
 			}
 			return
@@ -136,6 +142,7 @@ func (e *Editor) applyOperatorTextObject(op rune, prefix rune, unit rune, count 
 			e.wantX = e.cx
 			e.dirty = true
 			e.statusMsg = "deleted"
+			e.buffer.BeginUndoGroup()
 			e.mode = ModeInsert
 		}
 	}

@@ -47,6 +47,11 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 			return false
 		}
 
+		// End undo group when leaving insert mode
+		if e.mode == ModeInsert {
+			e.buffer.EndUndoGroup()
+		}
+
 		e.mode = ModeNormal
 		e.clearPending()
 		e.cmdBuf = nil
@@ -105,10 +110,7 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.moveRight(e.consumeCountOr1())
 		return
 	}
-	if k.Key() == tcell.KeyCtrlR {
-		e.redo()
-		return
-	}
+	// Ctrl+R is handled earlier in handleKey() to avoid state issues
 	if k.Key() != tcell.KeyRune {
 		return
 	}
@@ -176,6 +178,15 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 			return
 		}
 
+		// special case: gg as motion within operator (e.g., dgg)
+		if op == 'g' && r == 'g' {
+			// standalone gg: go to top
+			e.cy = 0
+			e.cx = 0
+			e.wantX = 0
+			return
+		}
+
 		e.applyOperatorMotion(op, r, cnt)
 		return
 	}
@@ -229,13 +240,16 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.pasteBefore(n)
 
 	case 'i':
+		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 	case 'a':
 		e.moveRight(1)
+		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 	case 'A':
 		e.cx = e.lineLen(e.cy)
 		e.wantX = e.cx
+		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 
 	case 'x':
@@ -247,9 +261,11 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 
 	case 'o':
 		e.openBelow()
+		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 	case 'O':
 		e.openAbove()
+		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 
 	case 'u':
@@ -262,10 +278,28 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.cx = e.lineLen(e.cy)
 		e.wantX = e.cx
 
+	case '^':
+		// first non-blank character
+		line := e.getLine(e.cy)
+		pos := 0
+		for i, ch := range []rune(line) {
+			if ch != ' ' && ch != '\t' {
+				pos = i
+				break
+			}
+		}
+		e.cx = pos
+		e.wantX = e.cx
+
 	case 'G':
 		e.cy = e.lineCount() - 1
 		e.cx = 0
 		e.wantX = 0
+
+	case '{':
+		e.moveParagraphBackward(e.consumeCountOr1())
+	case '}':
+		e.moveParagraphForward(e.consumeCountOr1())
 
 	// visual
 	case 'v':
@@ -337,6 +371,7 @@ func (e *Editor) handleVisual(k *tcell.EventKey) {
 				e.dirty = true
 				e.statusMsg = "deleted"
 				e.visualExit()
+				e.buffer.BeginUndoGroup()
 				e.mode = ModeInsert
 			}
 			return

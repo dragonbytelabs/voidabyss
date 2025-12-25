@@ -157,3 +157,208 @@ func wordEnd(r []rune, pos int, big bool) int {
 	}
 	return pos
 }
+
+// nextWordStart returns the position of the start of the next word/WORD after `pos`,
+// repeated `count` times, following Vim-ish semantics for operator+`w/W`.
+func (e *Editor) nextWordStart(pos int, count int, big bool) int {
+	if count <= 0 {
+		count = 1
+	}
+
+	r := e.textRunes()
+	n := len(r)
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > n {
+		pos = n
+	}
+
+	isWord := isWordCharSmall
+	if big {
+		isWord = isWordCharBig
+	}
+
+	i := pos
+	for c := 0; c < count; c++ {
+		if i >= n {
+			return n
+		}
+
+		// If currently in a word, consume to end of this word
+		if i < n && isWord(r[i]) {
+			for i < n && isWord(r[i]) {
+				i++
+			}
+		}
+
+		// Then skip non-word until next word start (this is what makes dw eat spaces)
+		for i < n && !isWord(r[i]) {
+			i++
+		}
+	}
+
+	return i
+}
+
+// prevWordStart returns the start of the previous word/WORD before `pos`,
+// repeated `count` times (Vim-ish for b/B).
+func (e *Editor) prevWordStart(pos int, count int, big bool) int {
+	if count <= 0 {
+		count = 1
+	}
+
+	r := e.textRunes()
+	n := len(r)
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > n {
+		pos = n
+	}
+
+	isWord := isWordCharSmall
+	if big {
+		isWord = isWordCharBig
+	}
+
+	i := pos
+	for c := 0; c < count; c++ {
+		if i <= 0 {
+			return 0
+		}
+
+		// Step back one to look "before" the cursor position
+		i--
+
+		// Skip any non-word backwards
+		for i >= 0 && !isWord(r[i]) {
+			i--
+		}
+		if i < 0 {
+			return 0
+		}
+
+		// Now we're in a word; move to its start
+		for i >= 0 && isWord(r[i]) {
+			i--
+		}
+		i++ // overshot by one
+	}
+
+	return i
+}
+
+// endOfWord returns the position of the end of the current/next word/WORD
+// (inclusive index) repeated `count` times (Vim-ish for e/E).
+func (e *Editor) endOfWord(pos int, count int, big bool) int {
+	if count <= 0 {
+		count = 1
+	}
+
+	r := e.textRunes()
+	n := len(r)
+	if pos < 0 {
+		pos = 0
+	}
+	if pos >= n {
+		return n - 1
+	}
+
+	isWord := isWordCharSmall
+	if big {
+		isWord = isWordCharBig
+	}
+
+	i := pos
+	end := pos
+
+	for c := 0; c < count; c++ {
+		// If we're not on a word, skip forward to next word
+		for i < n && !isWord(r[i]) {
+			i++
+		}
+		if i >= n {
+			return n - 1
+		}
+
+		// Now consume word; end becomes last char of it
+		for i < n && isWord(r[i]) {
+			end = i
+			i++
+		}
+	}
+
+	return end
+}
+
+// moveParagraphBackward moves cursor to the beginning of the previous paragraph
+func (e *Editor) moveParagraphBackward(count int) {
+	if count <= 0 {
+		count = 1
+	}
+
+	for i := 0; i < count; i++ {
+		// Move up one line to start
+		if e.cy <= 0 {
+			e.cy = 0
+			e.cx = 0
+			e.wantX = 0
+			return
+		}
+		e.cy--
+
+		// Skip current blank lines
+		for e.cy > 0 && e.isBlankLine(e.cy) {
+			e.cy--
+		}
+
+		// Now skip non-blank lines to find the blank separator
+		for e.cy > 0 && !e.isBlankLine(e.cy) {
+			e.cy--
+		}
+
+		// If we're on a blank line and not at top, move to first non-blank
+		if e.cy > 0 {
+			e.cy++
+		}
+	}
+
+	e.cx = 0
+	e.wantX = 0
+}
+
+// moveParagraphForward moves cursor to the beginning of the next paragraph
+func (e *Editor) moveParagraphForward(count int) {
+	if count <= 0 {
+		count = 1
+	}
+
+	maxLine := e.lineCount() - 1
+
+	for i := 0; i < count; i++ {
+		// Skip current non-blank lines
+		for e.cy < maxLine && !e.isBlankLine(e.cy) {
+			e.cy++
+		}
+
+		// Skip blank lines
+		for e.cy < maxLine && e.isBlankLine(e.cy) {
+			e.cy++
+		}
+	}
+
+	e.cx = 0
+	e.wantX = 0
+}
+
+// isBlankLine returns true if the line at y is empty or contains only whitespace
+func (e *Editor) isBlankLine(y int) bool {
+	line := e.getLine(y)
+	for _, ch := range line {
+		if ch != ' ' && ch != '\t' {
+			return false
+		}
+	}
+	return true
+}

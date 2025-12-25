@@ -20,6 +20,13 @@ func (e *Editor) backspace() {
 }
 
 func (e *Editor) newline() {
+	// End current undo group and start a new one
+	// This makes each line a separate undo, like Vim
+	if e.mode == ModeInsert {
+		e.buffer.EndUndoGroup()
+		e.buffer.BeginUndoGroup()
+	}
+
 	pos := e.posFromCursor()
 	_ = e.buffer.Insert(pos, "\n")
 	e.setCursorFromPos(pos + 1)
@@ -33,7 +40,15 @@ func (e *Editor) deleteAtCursor() {
 		return
 	}
 	deleted, _ := e.buffer.Slice(pos, pos+1)
-	e.writeDelete(Register{kind: RegCharwise, text: deleted})
+	// Single char deletes go to small delete register "-" unless explicitly overridden
+	if !e.regOverrideSet {
+		e.regs.small = Register{kind: RegCharwise, text: deleted}
+		// Unnamed register gets it too (Vim behavior)
+		e.regs.unnamed = e.regs.small
+	} else {
+		// User specified a register explicitly
+		e.writeDelete(Register{kind: RegCharwise, text: deleted})
+	}
 	_ = e.buffer.Delete(pos, pos+1)
 	e.setCursorFromPos(pos)
 	e.dirty = true
@@ -116,14 +131,6 @@ func (e *Editor) yankLines(n int) {
 		endPos = starts[endLine]
 	}
 
-	// remove trailing newline for yank if present
-	if endPos > startPos {
-		lastChar, _ := e.buffer.Slice(endPos-1, endPos)
-		if lastChar == "\n" {
-			endPos--
-		}
-	}
-
 	s, _ := e.buffer.Slice(startPos, endPos)
 	e.writeYank(Register{kind: RegLinewise, text: s})
 	e.statusMsg = "yanked"
@@ -179,57 +186,52 @@ func (e *Editor) yankToEOL() {
 	e.statusMsg = "yanked"
 }
 
-/* word-delete/yank by motions (w/b/e + big variants) */
 func (e *Editor) deleteByWordMotion(count int, big bool) {
-	pos := e.posFromCursor()
-	r := e.textRunes()
-	end := pos
-	for i := 0; i < max(1, count); i++ {
-		end = wordForwardStart(r, end, big)
-	}
-	if end <= pos {
+	start := e.posFromCursor()
+	end := e.nextWordStart(start, count, big)
+
+	if end <= start {
 		e.statusMsg = "nothing to delete"
 		return
 	}
-	deleted, _ := e.buffer.Slice(pos, end)
+
+	deleted, _ := e.buffer.Slice(start, end)
 	e.writeDelete(Register{kind: RegCharwise, text: deleted})
-	_ = e.buffer.Delete(pos, end)
-	e.setCursorFromPos(pos)
+	_ = e.buffer.Delete(start, end)
+
+	e.setCursorFromPos(start)
 	e.wantX = e.cx
 	e.dirty = true
 	e.statusMsg = "deleted"
 }
 
 func (e *Editor) yankByWordMotion(count int, big bool) {
-	pos := e.posFromCursor()
-	r := e.textRunes()
-	end := pos
-	for i := 0; i < max(1, count); i++ {
-		end = wordForwardStart(r, end, big)
-	}
-	if end <= pos {
+	start := e.posFromCursor()
+	end := e.nextWordStart(start, count, big)
+
+	if end <= start {
 		e.statusMsg = "nothing to yank"
 		return
 	}
-	yanked, _ := e.buffer.Slice(pos, end)
+
+	yanked, _ := e.buffer.Slice(start, end)
 	e.writeYank(Register{kind: RegCharwise, text: yanked})
 	e.statusMsg = "yanked"
 }
 
 func (e *Editor) deleteByBackWordMotion(count int, big bool) {
-	pos := e.posFromCursor()
-	r := e.textRunes()
-	start := pos
-	for i := 0; i < max(1, count); i++ {
-		start = wordBackStart(r, start, big)
-	}
-	if start >= pos {
+	end := e.posFromCursor()
+	start := e.prevWordStart(end, count, big)
+
+	if end <= start {
 		e.statusMsg = "nothing to delete"
 		return
 	}
-	deleted, _ := e.buffer.Slice(start, pos)
+
+	deleted, _ := e.buffer.Slice(start, end)
 	e.writeDelete(Register{kind: RegCharwise, text: deleted})
-	_ = e.buffer.Delete(start, pos)
+	_ = e.buffer.Delete(start, end)
+
 	e.setCursorFromPos(start)
 	e.wantX = e.cx
 	e.dirty = true
@@ -237,60 +239,60 @@ func (e *Editor) deleteByBackWordMotion(count int, big bool) {
 }
 
 func (e *Editor) yankByBackWordMotion(count int, big bool) {
-	pos := e.posFromCursor()
-	r := e.textRunes()
-	start := pos
-	for i := 0; i < max(1, count); i++ {
-		start = wordBackStart(r, start, big)
-	}
-	if start >= pos {
+	end := e.posFromCursor()
+	start := e.prevWordStart(end, count, big)
+
+	if end <= start {
 		e.statusMsg = "nothing to yank"
 		return
 	}
-	yanked, _ := e.buffer.Slice(start, pos)
+
+	yanked, _ := e.buffer.Slice(start, end)
 	e.writeYank(Register{kind: RegCharwise, text: yanked})
 	e.statusMsg = "yanked"
 }
 
 func (e *Editor) deleteByEndWordMotion(count int, big bool) {
-	pos := e.posFromCursor()
-	r := e.textRunes()
-	endPos := pos
-	for i := 0; i < max(1, count); i++ {
-		endPos = wordEnd(r, endPos, big)
-		// make end exclusive
-		if endPos < len(r) {
-			endPos++
-		}
-	}
-	if endPos <= pos {
+	start := e.posFromCursor()
+	if e.buffer.Len() == 0 {
 		e.statusMsg = "nothing to delete"
 		return
 	}
-	deleted, _ := e.buffer.Slice(pos, endPos)
+
+	endIncl := e.endOfWord(start, count, big)
+	end := endIncl + 1 // convert inclusive end -> slicing end
+
+	if end <= start {
+		e.statusMsg = "nothing to delete"
+		return
+	}
+
+	deleted, _ := e.buffer.Slice(start, end)
 	e.writeDelete(Register{kind: RegCharwise, text: deleted})
-	_ = e.buffer.Delete(pos, endPos)
-	e.setCursorFromPos(pos)
+	_ = e.buffer.Delete(start, end)
+
+	e.setCursorFromPos(start)
 	e.wantX = e.cx
 	e.dirty = true
 	e.statusMsg = "deleted"
 }
 
 func (e *Editor) yankByEndWordMotion(count int, big bool) {
-	pos := e.posFromCursor()
-	r := e.textRunes()
-	endPos := pos
-	for i := 0; i < max(1, count); i++ {
-		endPos = wordEnd(r, endPos, big)
-		if endPos < len(r) {
-			endPos++
-		}
-	}
-	if endPos <= pos {
+	start := e.posFromCursor()
+	if e.buffer.Len() == 0 {
 		e.statusMsg = "nothing to yank"
 		return
 	}
-	yanked, _ := e.buffer.Slice(pos, endPos)
+
+	endIncl := e.endOfWord(start, count, big)
+	end := endIncl + 1
+
+	if end <= start {
+		e.statusMsg = "nothing to yank"
+		return
+	}
+
+	yanked, _ := e.buffer.Slice(start, end)
 	e.writeYank(Register{kind: RegCharwise, text: yanked})
 	e.statusMsg = "yanked"
 }

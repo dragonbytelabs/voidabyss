@@ -9,7 +9,7 @@ func (e *Editor) pasteAfter() {
 
 	switch reg.kind {
 	case RegLinewise:
-		// Insert at start of NEXT line if it exists; otherwise at EOF (with newline if needed).
+		// Paste below current line
 		insertPos := e.buffer.Len()
 
 		if e.cy+1 < e.lineCount() {
@@ -25,9 +25,10 @@ func (e *Editor) pasteAfter() {
 			insertPos = e.buffer.Len()
 		}
 
-		_ = e.buffer.Insert(insertPos, reg.text+"\n")
+		_ = e.buffer.Insert(insertPos, reg.text)
+		// Cursor goes to first non-blank character of pasted line
 		e.setCursorFromPos(insertPos)
-		e.wantX = 0
+		e.moveToFirstNonBlank()
 
 	default: // charwise
 		pos := e.posFromCursor()
@@ -36,6 +37,7 @@ func (e *Editor) pasteAfter() {
 			insertPos = pos + 1
 		}
 		_ = e.buffer.Insert(insertPos, reg.text)
+		// Cursor goes to last character of pasted text
 		e.setCursorFromPos(insertPos + len([]rune(reg.text)) - 1)
 		e.wantX = e.cx
 	}
@@ -64,13 +66,28 @@ func (e *Editor) pasteBeforeOnce(reg Register) {
 	switch reg.kind {
 	case RegLinewise:
 		insertPos := e.lineStartPos(e.cy)
-		_ = e.buffer.Insert(insertPos, reg.text+"\n")
+		_ = e.buffer.Insert(insertPos, reg.text)
+		// Cursor stays at first non-blank of pasted line
 		e.setCursorFromPos(insertPos)
-		e.wantX = 0
+		e.moveToFirstNonBlank()
 	default:
 		pos := e.posFromCursor()
 		_ = e.buffer.Insert(pos, reg.text)
-		e.setCursorFromPos(pos)
+		// Cursor goes to last character of pasted text
+		e.setCursorFromPos(pos + len([]rune(reg.text)) - 1)
 		e.wantX = e.cx
 	}
+}
+
+func (e *Editor) moveToFirstNonBlank() {
+	line := e.getLine(e.cy)
+	pos := 0
+	for i, ch := range []rune(line) {
+		if ch != ' ' && ch != '\t' {
+			pos = i
+			break
+		}
+	}
+	e.cx = pos
+	e.wantX = e.cx
 }
