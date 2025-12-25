@@ -36,7 +36,8 @@ func (e *Editor) visualRange() (start, end int, kind RegisterKind) {
 		return start, end, RegLinewise
 	}
 
-	return a, b, RegCharwise
+	// Charwise: include the character under the cursor (end is exclusive, so +1)
+	return a, b + 1, RegCharwise
 }
 
 func (e *Editor) lineIndexForPos(pos int) int {
