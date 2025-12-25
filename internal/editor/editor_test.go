@@ -20,9 +20,10 @@ func newTestEditor(t *testing.T, txt string) *Editor {
 	s.SetSize(80, 24)
 
 	e := &Editor{
-		s:      s,
-		buffer: buffer.NewFromString(txt),
-		mode:   ModeNormal,
+		s:           s,
+		buffer:      buffer.NewFromString(txt),
+		mode:        ModeNormal,
+		indentWidth: 4,
 	}
 	e.regs.named = make(map[rune]Register)
 	e.marks = make(map[rune]Mark)

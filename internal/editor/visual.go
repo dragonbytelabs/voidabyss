@@ -59,3 +59,16 @@ func (e *Editor) lineIndexForPos(pos int) int {
 	}
 	return best
 }
+
+// visualGetLineRange returns the start and end line indices for the visual selection
+func (e *Editor) visualGetLineRange() (startLine, endLine int) {
+	a := e.visualAnchor
+	b := e.posFromCursor()
+	if a > b {
+		a, b = b, a
+	}
+
+	startLine = e.lineIndexForPos(a)
+	endLine = e.lineIndexForPos(b)
+	return startLine, endLine
+}

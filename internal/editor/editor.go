@@ -146,6 +146,9 @@ type Editor struct {
 	jumpList      []JumpListEntry
 	jumpListIndex int // current position in jump list (-1 = at latest position)
 
+	// configuration
+	indentWidth int // number of spaces for indentation
+
 	// popup UI
 	popupActive bool
 	popupTitle  string
@@ -177,10 +180,11 @@ func newEditorFromFile(path string) (*Editor, error) {
 	}
 
 	ed := &Editor{
-		s:        s,
-		buffer:   buffer.NewFromString(txt),
-		mode:     ModeNormal,
-		filename: abs,
+		s:           s,
+		buffer:      buffer.NewFromString(txt),
+		mode:        ModeNormal,
+		filename:    abs,
+		indentWidth: 4,
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.marks = make(map[rune]Mark)
@@ -211,10 +215,11 @@ func newEditorFromProject(path string) (*Editor, error) {
 	}
 
 	ed := &Editor{
-		s:        s,
-		buffer:   buffer.NewFromString(""),
-		mode:     ModeNormal,
-		filename: abs,
+		s:           s,
+		buffer:      buffer.NewFromString(""),
+		mode:        ModeNormal,
+		filename:    abs,
+		indentWidth: 4,
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.marks = make(map[rune]Mark)

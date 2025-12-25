@@ -254,6 +254,31 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 			return
 		}
 
+		// special case: >> indent, << unindent
+		if op == '>' && r == '>' {
+			// Indent cnt lines starting from current
+			endLine := min(e.cy+cnt-1, e.lineCount()-1)
+			e.indentLines(e.cy, endLine)
+			e.statusMsg = "indented"
+			return
+		}
+		if op == '<' && r == '<' {
+			// Unindent cnt lines starting from current
+			endLine := min(e.cy+cnt-1, e.lineCount()-1)
+			e.unindentLines(e.cy, endLine)
+			e.statusMsg = "unindented"
+			return
+		}
+
+		// special case: == auto-indent
+		if op == '=' && r == '=' {
+			// Auto-indent cnt lines starting from current
+			endLine := min(e.cy+cnt-1, e.lineCount()-1)
+			e.autoIndentLines(e.cy, endLine)
+			e.statusMsg = "auto-indented"
+			return
+		}
+
 		e.applyOperatorMotion(op, r, cnt)
 		return
 	}
@@ -264,7 +289,7 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.awaitingRegister = true
 		return
 
-	case 'd', 'c', 'y', 'g':
+	case 'd', 'c', 'y', 'g', '>', '<', '=':
 		// capture count NOW, so it sticks to operator even if more keys come
 		e.pendingOpCount = e.consumeCountOr1()
 		e.pendingOp = r
@@ -479,6 +504,27 @@ func (e *Editor) handleVisual(k *tcell.EventKey) {
 				e.buffer.BeginUndoGroup()
 				e.mode = ModeInsert
 			}
+			return
+
+		case '>':
+			// Indent visual selection (line-wise)
+			startLine, endLine := e.visualGetLineRange()
+			e.indentLines(startLine, endLine)
+			e.visualExit()
+			return
+
+		case '<':
+			// Unindent visual selection (line-wise)
+			startLine, endLine := e.visualGetLineRange()
+			e.unindentLines(startLine, endLine)
+			e.visualExit()
+			return
+
+		case '=':
+			// Auto-indent visual selection (line-wise)
+			startLine, endLine := e.visualGetLineRange()
+			e.autoIndentLines(startLine, endLine)
+			e.visualExit()
 			return
 		}
 	}
