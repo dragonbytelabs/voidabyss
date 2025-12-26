@@ -14,6 +14,8 @@ var helpTopics = map[string]string{
 	"completion":      helpCompletion,
 	"undo":            helpUndo,
 	"macros":          helpMacros,
+	"splits":          helpSplits,
+	"windows":         helpSplits, // Alias for splits
 }
 
 const helpMain = `VOIDABYSS HELP - A Vim-inspired modal text editor
@@ -178,6 +180,47 @@ Example:
   type "hello"   - All one undo
   Esc            - Commit group
   u              - Undoes entire "hello"
+`
+
+const helpSplits = `SPLITS (WINDOWS)
+
+Creating Splits:
+  :split  or :sp    - Create horizontal split
+  :vsplit or :vs    - Create vertical split
+  Ctrl+W s          - Create horizontal split
+  Ctrl+W v          - Create vertical split
+
+Navigating Splits:
+  Ctrl+W w          - Cycle to next split
+  Ctrl+W W          - Cycle to next split
+  Ctrl+W h          - Move to left split
+  Ctrl+W l          - Move to right split
+  Ctrl+W j          - Move to split below
+  Ctrl+W k          - Move to split above
+
+Closing Splits:
+  :close            - Close current split
+  :only             - Close all splits except current
+  Ctrl+W c          - Close current split
+  Ctrl+W o          - Close all splits except current
+
+Buffer Management:
+  Each split shows a buffer independently
+  Use :e filename to open file in current split
+  Use :bn/:bp to switch buffers in current split
+  Splits viewing same buffer have independent cursors
+  File tree spans all splits (not per-split)
+
+Tips:
+  - Create splits to view multiple files
+  - Or view different parts of same file
+  - Each split maintains its own cursor position
+  - Minimum 10 columns for vsplit
+  - Minimum 6 rows for horizontal split
+  - Splits automatically resize when closed
+  - Visual borders separate splits
+
+See also: :help buffers
 `
 
 // GetHelp returns help content for a given topic

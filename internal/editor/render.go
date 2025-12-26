@@ -7,6 +7,163 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+// renderBufferRegion renders a buffer in a specific screen region
+func (e *Editor) renderBufferRegion(bv *BufferView, x, y, width, height int, scheme *ColorScheme) {
+	if bv == nil || width <= 0 || height <= 0 {
+		return
+	}
+
+	style := tcell.StyleDefault.Background(scheme.Background).Foreground(scheme.Foreground)
+	highlightStyle := tcell.StyleDefault.Background(scheme.SearchBg).Foreground(scheme.Search)
+	visualStyle := tcell.StyleDefault.Background(scheme.VisualBg).Foreground(scheme.Visual)
+	lineNumStyle := tcell.StyleDefault.Foreground(scheme.LineNumber).Background(scheme.Background)
+
+	// Calculate line number column width
+	lineNumWidth := 0
+	if e.config != nil && e.config.ShowLineNumbers {
+		totalLines := len(strings.Split(bv.buffer.String(), "\n"))
+		lineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 2 // +2 for fold indicator and spacing
+		if lineNumWidth < 5 {
+			lineNumWidth = 5
+		}
+	}
+
+	// Get syntax highlights for entire visible viewport
+	var highlights []Highlight
+	if bv.parser != nil {
+		// Calculate byte range for entire visible viewport
+		lines := strings.Split(bv.buffer.String(), "\n")
+		firstLine := bv.rowOffset
+		lastLine := min(bv.rowOffset+height, len(lines)-1)
+		if firstLine < len(lines) && lastLine >= firstLine {
+			startPos := 0
+			for i := 0; i < firstLine && i < len(lines); i++ {
+				startPos += len(lines[i]) + 1 // +1 for newline
+			}
+			endPos := bv.buffer.Len()
+			if lastLine < len(lines)-1 {
+				endPos = startPos
+				for i := firstLine; i <= lastLine && i < len(lines); i++ {
+					endPos += len(lines[i]) + 1
+				}
+			}
+			highlights = bv.parser.GetHighlights(startPos, endPos)
+		}
+	}
+
+	lines := strings.Split(bv.buffer.String(), "\n")
+	visualLine := 0
+	actualLine := bv.rowOffset
+
+	for visualLine < height && actualLine < len(lines) {
+		// Skip folded lines
+		if e.isLineFolded(actualLine) {
+			actualLine++
+			continue
+		}
+
+		lineIndex := actualLine
+		screenY := y + visualLine
+
+		// Draw line number with fold indicator
+		if lineNumWidth > 0 {
+			var lineNum string
+			if e.config.RelativeLineNums {
+				// Relative line numbers
+				diff := lineIndex - bv.cy
+				if diff == 0 {
+					lineNum = fmt.Sprintf("%*d", lineNumWidth-2, lineIndex+1)
+				} else {
+					if diff < 0 {
+						diff = -diff
+					}
+					lineNum = fmt.Sprintf("%*d", lineNumWidth-2, diff)
+				}
+			} else {
+				// Absolute line numbers
+				lineNum = fmt.Sprintf("%*d", lineNumWidth-2, lineIndex+1)
+			}
+
+			// Draw line number
+			for i, r := range lineNum {
+				if x+i < x+width {
+					e.s.SetContent(x+i, screenY, r, nil, lineNumStyle)
+				}
+			}
+
+			// Draw fold indicator
+			foldIndicator := e.getFoldIndicator(lineIndex)
+			if x+lineNumWidth-2 < x+width {
+				e.s.SetContent(x+lineNumWidth-2, screenY, []rune(foldIndicator)[0], nil, lineNumStyle)
+			}
+
+			// Add spacing after line number
+			if x+lineNumWidth-1 < x+width {
+				e.s.SetContent(x+lineNumWidth-1, screenY, ' ', nil, style)
+			}
+		}
+
+		runes := []rune(lines[lineIndex])
+		start := min(bv.colOffset, len(runes))
+		visible := runes[start:]
+
+		// Calculate absolute position for highlight matching
+		lineStartPos := 0
+		for i := 0; i < lineIndex && i < len(lines); i++ {
+			lineStartPos += len(lines[i]) + 1
+		}
+
+		// Adjust content start and width for line numbers
+		textStartX := x + lineNumWidth
+		textWidth := width - lineNumWidth
+
+		for col := 0; col < textWidth && col < len(visible); col++ {
+			screenX := textStartX + col
+			if screenX >= x+width {
+				break
+			}
+
+			absPos := lineStartPos + start + col
+			cellStyle := style
+
+			// Check syntax highlighting first (lowest priority)
+			if len(highlights) > 0 {
+				syntaxStyle := e.getSyntaxStyle(absPos, highlights)
+				if syntaxStyle != nil {
+					cellStyle = *syntaxStyle
+				}
+			}
+
+			// Check if this position is in visual selection (takes priority)
+			if e.isInVisualSelection(absPos) {
+				cellStyle = visualStyle
+			} else if e.isSearchMatch(absPos) {
+				// Check if this position is in a search match
+				cellStyle = highlightStyle
+			}
+
+			e.s.SetContent(screenX, screenY, visible[col], nil, cellStyle)
+		}
+
+		// Clear rest of line in this region
+		for col := textStartX + len(visible); col < x+width; col++ {
+			e.s.SetContent(col, screenY, ' ', nil, style)
+		}
+
+		visualLine++
+		actualLine++
+	}
+
+	// Clear remaining lines in region
+	for visualLine < height {
+		screenY := y + visualLine
+		for col := 0; col < width; col++ {
+			e.s.SetContent(x+col, screenY, ' ', nil, style)
+		}
+		visualLine++
+	}
+}
+
 func (e *Editor) draw() {
 	e.s.Clear()
 	w, h := e.s.Size()
@@ -15,17 +172,14 @@ func (e *Editor) draw() {
 	scheme := GetColorScheme(e.config.ColorScheme)
 
 	style := tcell.StyleDefault.Background(scheme.Background).Foreground(scheme.Foreground)
-	highlightStyle := tcell.StyleDefault.Background(scheme.SearchBg).Foreground(scheme.Search)
-	visualStyle := tcell.StyleDefault.Background(scheme.VisualBg).Foreground(scheme.Visual)
 	treeStyle := tcell.StyleDefault.Foreground(scheme.TreeDirectory)
 	treeCursorStyle := tcell.StyleDefault.Background(scheme.TreeCursorBg).Foreground(scheme.TreeCursor)
 	treeBorderStyle := tcell.StyleDefault.Foreground(scheme.TreeBorder)
-	lineNumStyle := tcell.StyleDefault.Foreground(scheme.LineNumber).Background(scheme.Background)
+	splitBorderStyle := tcell.StyleDefault.Foreground(scheme.TreeBorder) // Reuse tree border color for splits
 
 	contentStartX := 0
-	contentWidth := w
 
-	// Draw file tree if open
+	// Draw file tree if open (spans entire height, not per-split)
 	if e.treeOpen && e.fileTree != nil {
 		treeWidth := e.treePanelWidth
 		if treeWidth > w-10 {
@@ -59,122 +213,109 @@ func (e *Editor) draw() {
 			}
 		}
 
-		// Draw vertical border
+		// Draw vertical border after file tree
 		for y := 0; y < h-1; y++ {
 			e.s.SetContent(treeWidth, y, '│', nil, treeBorderStyle)
 		}
 
 		contentStartX = treeWidth + 1
-		contentWidth = w - contentStartX
 	}
 
-	// Calculate line number column width
-	lineNumWidth := 0
-	if e.config != nil && e.config.ShowLineNumbers {
-		totalLines := e.lineCount()
-		lineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 2 // +2 for fold indicator and spacing
-		if lineNumWidth < 5 {
-			lineNumWidth = 5
+	// Render splits
+	if len(e.splits) == 0 {
+		e.initSplits()
+	}
+
+	for _, split := range e.splits {
+		// Determine position based on split type
+		var splitX, splitY int
+		if split.splitType == SplitFileTree {
+			// File tree split is always at x=0
+			splitX = split.x
+			splitY = split.y
+		} else {
+			// Buffer splits are adjusted for file tree if present
+			splitX = contentStartX + split.x
+			splitY = split.y
 		}
-	}
 
-	// Get syntax highlights for entire visible viewport once
-	var highlights []Highlight
-	bv := e.buf()
-	if bv != nil && bv.parser != nil {
-		// Calculate byte range for entire visible viewport
-		firstLine := e.rowOffset
-		lastLine := min(e.rowOffset+h-1, e.lineCount()-1)
-		if firstLine < e.lineCount() && lastLine >= firstLine {
-			startPos := e.lineStartPos(firstLine)
-			endPos := e.buffer.Len()
-			if lastLine < e.lineCount()-1 {
-				endPos = e.lineStartPos(lastLine + 1)
-			}
-			highlights = bv.parser.GetHighlights(startPos, endPos)
-		}
-	}
+		splitWidth := split.width
+		splitHeight := split.height
 
-	// Draw buffer content
-	visualLine := 0
-	actualLine := e.rowOffset
-	for visualLine < h-1 && actualLine < e.lineCount() {
-		// Skip folded lines
-		if e.isLineFolded(actualLine) {
-			actualLine++
+		// Render based on split type
+		if split.splitType == SplitFileTree {
+			// File tree rendering is already done above, skip
 			continue
 		}
 
-		lineIndex := actualLine
+		// Render buffer split
+		var bv *BufferView
+		if split.bufferIndex >= 0 && split.bufferIndex < len(e.buffers) {
+			bv = e.buffers[split.bufferIndex]
+		}
 
-		// Draw line number with fold indicator
-		if lineNumWidth > 0 {
-			var lineNum string
-			if e.config.RelativeLineNums {
-				// Relative line numbers
-				diff := lineIndex - e.cy
-				if diff == 0 {
-					lineNum = fmt.Sprintf("%*d", lineNumWidth-2, lineIndex+1)
-				} else {
-					if diff < 0 {
-						diff = -diff
+		// Create a temporary BufferView with the split's view state
+		if bv != nil {
+			tempBv := &BufferView{
+				buffer:        bv.buffer,
+				filename:      bv.filename,
+				dirty:         bv.dirty,
+				marks:         bv.marks,
+				jumpList:      bv.jumpList,
+				jumpListIndex: bv.jumpListIndex,
+				parser:        bv.parser,
+			}
+
+			// Use split's view state (cursor, offsets)
+			tempBv.cx = split.cx
+			tempBv.cy = split.cy
+			tempBv.rowOffset = split.rowOffset
+			tempBv.colOffset = split.colOffset
+			tempBv.wantX = split.wantX
+
+			// Render this split's buffer with its view state
+			e.renderBufferRegion(tempBv, splitX, splitY, splitWidth, splitHeight, scheme)
+		}
+	}
+
+	// Draw borders between splits
+	for idx, split := range e.splits {
+		splitX := contentStartX + split.x
+		splitY := split.y
+		splitWidth := split.width
+		splitHeight := split.height
+
+		// Draw vertical border on the right edge if there's a split to the right
+		for j, other := range e.splits {
+			if idx == j {
+				continue
+			}
+			// Check if there's a split directly to the right
+			if other.x == split.x+split.width && other.y < split.y+split.height && other.y+other.height > split.y {
+				borderX := splitX + splitWidth
+				for y := 0; y < splitHeight && splitY+y < h-1; y++ {
+					e.s.SetContent(borderX, splitY+y, '│', nil, splitBorderStyle)
+				}
+				break
+			}
+		}
+
+		// Draw horizontal border on the bottom edge if there's a split below
+		for j, other := range e.splits {
+			if idx == j {
+				continue
+			}
+			// Check if there's a split directly below
+			if other.y == split.y+split.height && other.x < split.x+split.width && other.x+other.width > split.x {
+				borderY := splitY + splitHeight
+				if borderY < h-1 {
+					for x := 0; x < splitWidth; x++ {
+						e.s.SetContent(splitX+x, borderY, '─', nil, splitBorderStyle)
 					}
-					lineNum = fmt.Sprintf("%*d", lineNumWidth-2, diff)
 				}
-			} else {
-				// Absolute line numbers
-				lineNum = fmt.Sprintf("%*d", lineNumWidth-2, lineIndex+1)
+				break
 			}
-
-			// Draw line number
-			for i, r := range lineNum {
-				e.s.SetContent(contentStartX+i, visualLine, r, nil, lineNumStyle)
-			}
-
-			// Draw fold indicator
-			foldIndicator := e.getFoldIndicator(lineIndex)
-			e.s.SetContent(contentStartX+lineNumWidth-2, visualLine, []rune(foldIndicator)[0], nil, lineNumStyle)
-
-			// Add spacing after line number
-			e.s.SetContent(contentStartX+lineNumWidth-1, visualLine, ' ', nil, style)
 		}
-
-		runes := []rune(e.getLine(lineIndex))
-		start := min(e.colOffset, len(runes))
-		visible := runes[start:]
-
-		// Calculate absolute position for highlight matching
-		lineStartPos := e.lineStartPos(lineIndex)
-
-		// Adjust content start and width for line numbers
-		textStartX := contentStartX + lineNumWidth
-		textWidth := contentWidth - lineNumWidth
-
-		for x := 0; x < textWidth && x < len(visible); x++ {
-			absPos := lineStartPos + start + x
-			cellStyle := style
-
-			// Check syntax highlighting first (lowest priority)
-			if len(highlights) > 0 {
-				syntaxStyle := e.getSyntaxStyle(absPos, highlights)
-				if syntaxStyle != nil {
-					cellStyle = *syntaxStyle
-				}
-			}
-
-			// Check if this position is in visual selection (takes priority)
-			if e.isInVisualSelection(absPos) {
-				cellStyle = visualStyle
-			} else if e.isSearchMatch(absPos) {
-				// Check if this position is in a search match
-				cellStyle = highlightStyle
-			}
-
-			e.s.SetContent(textStartX+x, visualLine, visible[x], nil, cellStyle)
-		}
-
-		visualLine++
-		actualLine++
 	}
 
 	e.drawStatus(w, h)
@@ -183,31 +324,41 @@ func (e *Editor) draw() {
 		e.drawPopup(w, h)
 	}
 
-	// Calculate line number width for cursor positioning
-	cursorLineNumWidth := 0
-	if e.config != nil && e.config.ShowLineNumbers {
-		totalLines := e.lineCount()
-		cursorLineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 2 // +2 for fold indicator and spacing
-		if cursorLineNumWidth < 5 {
-			cursorLineNumWidth = 5
+	// Position cursor in the active split
+	if len(e.splits) > 0 && e.currentSplit < len(e.splits) {
+		split := e.splits[e.currentSplit]
+
+		// Calculate line number width for cursor positioning
+		cursorLineNumWidth := 0
+		if e.config != nil && e.config.ShowLineNumbers {
+			totalLines := e.lineCount()
+			cursorLineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 2
+			if cursorLineNumWidth < 5 {
+				cursorLineNumWidth = 5
+			}
 		}
-	}
 
-	// Position cursor
-	screenX := e.cx - e.colOffset + contentStartX + cursorLineNumWidth
-	screenY := e.cy - e.rowOffset
-	screenX = max(contentStartX+cursorLineNumWidth, screenX)
-	screenY = max(0, screenY)
-	if screenY > h-2 {
-		screenY = h - 2
-	}
+		// Calculate cursor position within the split
+		splitX := contentStartX + split.x
+		screenX := e.cx - e.colOffset + splitX + cursorLineNumWidth
+		screenY := e.cy - e.rowOffset + split.y
 
-	// Only show cursor if buffer has focus
-	if !e.focusTree {
-		e.s.ShowCursor(screenX, screenY)
+		// Bounds check
+		screenX = max(splitX+cursorLineNumWidth, screenX)
+		screenX = min(screenX, splitX+split.width-1)
+		screenY = max(split.y, screenY)
+		screenY = min(screenY, split.y+split.height-1)
+
+		// Only show cursor if buffer has focus (not file tree)
+		if !e.focusTree {
+			e.s.ShowCursor(screenX, screenY)
+		} else {
+			e.s.HideCursor()
+		}
 	} else {
 		e.s.HideCursor()
 	}
+
 	e.s.Show()
 }
 

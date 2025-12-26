@@ -29,11 +29,17 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 			// Ctrl+W w - next split
 			e.nextSplit()
 		case 'h':
-			// Ctrl+W h - left split (for now, just prev)
-			e.prevSplit()
+			// Ctrl+W h - left split
+			e.moveSplitLeft()
 		case 'l':
-			// Ctrl+W l - right split (for now, just next)
-			e.nextSplit()
+			// Ctrl+W l - right split
+			e.moveSplitRight()
+		case 'j':
+			// Ctrl+W j - split below
+			e.moveSplitDown()
+		case 'k':
+			// Ctrl+W k - split above
+			e.moveSplitUp()
 		case 'v':
 			// Ctrl+W v - vertical split
 			e.vsplit()
@@ -46,8 +52,22 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 		case 'o':
 			// Ctrl+W o - only (close all other splits)
 			if len(e.splits) > 1 {
-				e.splits = []*Split{e.splits[e.currentSplit]}
-				e.currentSplit = 0
+				// Find all buffer splits to keep
+				var keepSplits []*Split
+				currentSplitNewIndex := 0
+
+				// Keep file tree if present
+				for i, s := range e.splits {
+					if s.splitType == SplitFileTree {
+						keepSplits = append(keepSplits, s)
+					} else if i == e.currentSplit {
+						keepSplits = append(keepSplits, s)
+						currentSplitNewIndex = len(keepSplits) - 1
+					}
+				}
+
+				e.splits = keepSplits
+				e.currentSplit = currentSplitNewIndex
 				e.redistributeSplitSpace()
 				e.statusMsg = "closed all other splits"
 			}
@@ -57,21 +77,10 @@ func (e *Editor) handleKey(k *tcell.EventKey) bool {
 		return false
 	}
 
-	// Handle Ctrl+W to enter window command mode (if no tree or tree closed)
-	if k.Key() == tcell.KeyCtrlW && (!e.treeOpen || len(e.splits) > 1) {
+	// Handle Ctrl+W to enter window command mode
+	if k.Key() == tcell.KeyCtrlW {
 		e.awaitingWindow = true
 		e.statusMsg = "-- WINDOW --"
-		return false
-	}
-
-	// Handle Ctrl+W to toggle focus between tree and buffer (legacy, when tree is open and single split)
-	if e.treeOpen && k.Key() == tcell.KeyCtrlW && len(e.splits) == 1 {
-		e.focusTree = !e.focusTree
-		if e.focusTree {
-			e.statusMsg = "focus: file tree"
-		} else {
-			e.statusMsg = "focus: buffer"
-		}
 		return false
 	}
 

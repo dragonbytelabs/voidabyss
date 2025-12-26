@@ -22,6 +22,12 @@ func (e *Editor) openFile(path string) {
 			e.syncToBuffer() // save current buffer state
 			e.currentBuffer = i
 			e.syncFromBuffer() // load new buffer state
+
+			// Update current split to point to this buffer
+			if len(e.splits) > 0 && e.currentSplit >= 0 && e.currentSplit < len(e.splits) {
+				e.splits[e.currentSplit].bufferIndex = i
+			}
+
 			e.FireBufEnter()
 			e.statusMsg = fmt.Sprintf("switched to buffer %d: %s", i+1, filepath.Base(abs))
 			return
@@ -42,6 +48,12 @@ func (e *Editor) openFile(path string) {
 	e.buffers = append(e.buffers, bufView)
 	e.currentBuffer = len(e.buffers) - 1
 	e.syncFromBuffer() // load new buffer state
+
+	// Update current split to point to the new buffer
+	if len(e.splits) > 0 && e.currentSplit >= 0 && e.currentSplit < len(e.splits) {
+		e.splits[e.currentSplit].bufferIndex = e.currentBuffer
+	}
+
 	e.FireBufNew()
 	e.FireBufRead()
 
@@ -78,6 +90,12 @@ func (e *Editor) nextBuffer() {
 	e.syncToBuffer() // save current buffer state
 	e.currentBuffer = (e.currentBuffer + 1) % len(e.buffers)
 	e.syncFromBuffer() // load new buffer state
+
+	// Update current split to point to this buffer
+	if len(e.splits) > 0 && e.currentSplit >= 0 && e.currentSplit < len(e.splits) {
+		e.splits[e.currentSplit].bufferIndex = e.currentBuffer
+	}
+
 	e.FireBufEnter()
 	e.statusMsg = fmt.Sprintf("buffer %d: %s", e.currentBuffer+1, filepath.Base(e.filename))
 }
@@ -94,6 +112,12 @@ func (e *Editor) prevBuffer() {
 		e.currentBuffer = len(e.buffers) - 1
 	}
 	e.syncFromBuffer() // load new buffer state
+
+	// Update current split to point to this buffer
+	if len(e.splits) > 0 && e.currentSplit >= 0 && e.currentSplit < len(e.splits) {
+		e.splits[e.currentSplit].bufferIndex = e.currentBuffer
+	}
+
 	e.FireBufEnter()
 	e.statusMsg = fmt.Sprintf("buffer %d: %s", e.currentBuffer+1, filepath.Base(e.filename))
 }

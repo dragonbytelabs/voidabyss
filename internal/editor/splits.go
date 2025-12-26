@@ -2,13 +2,29 @@ package editor
 
 import "fmt"
 
-// Split represents a window split showing a buffer
+// SplitType represents the type of split
+type SplitType int
+
+const (
+	SplitBuffer SplitType = iota
+	SplitFileTree
+)
+
+// Split represents a window split showing a buffer or file tree
 type Split struct {
-	bufferIndex int // index into Editor.buffers
-	width       int // width of this split in columns
-	height      int // height of this split in rows
-	x           int // x position on screen
-	y           int // y position on screen
+	splitType   SplitType // type of split (buffer or file tree)
+	bufferIndex int       // index into Editor.buffers (only for SplitBuffer)
+	width       int       // width of this split in columns
+	height      int       // height of this split in rows
+	x           int       // x position on screen (relative to content area)
+	y           int       // y position on screen
+
+	// View state for this split (only for SplitBuffer)
+	cx        int // cursor x position
+	cy        int // cursor y position
+	rowOffset int // scroll offset
+	colOffset int // scroll offset
+	wantX     int // desired x position for vertical movement
 }
 
 // initSplits initializes the split system with a single split
@@ -18,16 +34,75 @@ func (e *Editor) initSplits() {
 	// Reserve space for status line
 	height := h - 1
 
-	e.splits = []*Split{
-		{
-			bufferIndex: e.currentBuffer,
-			width:       w,
-			height:      height,
-			x:           0,
-			y:           0,
-		},
+	// If file tree is open, create it as the first split
+	if e.treeOpen && e.fileTree != nil {
+		treeWidth := e.treePanelWidth
+		if treeWidth > w-10 {
+			treeWidth = w - 10
+		}
+		if treeWidth < 20 {
+			treeWidth = 20
+		}
+
+		e.splits = []*Split{
+			{
+				splitType: SplitFileTree,
+				width:     treeWidth,
+				height:    height,
+				x:         0,
+				y:         0,
+			},
+			{
+				splitType:   SplitBuffer,
+				bufferIndex: e.currentBuffer,
+				width:       w - treeWidth - 1, // -1 for border
+				height:      height,
+				x:           treeWidth + 1,
+				y:           0,
+				cx:          e.cx,
+				cy:          e.cy,
+				rowOffset:   e.rowOffset,
+				colOffset:   e.colOffset,
+				wantX:       e.wantX,
+			},
+		}
+		e.currentSplit = 1 // Start with buffer split focused
+	} else {
+		e.splits = []*Split{
+			{
+				splitType:   SplitBuffer,
+				bufferIndex: e.currentBuffer,
+				width:       w,
+				height:      height,
+				x:           0,
+				y:           0,
+				cx:          e.cx,
+				cy:          e.cy,
+				rowOffset:   e.rowOffset,
+				colOffset:   e.colOffset,
+				wantX:       e.wantX,
+			},
+		}
+		e.currentSplit = 0
 	}
-	e.currentSplit = 0
+}
+
+// saveSplitState saves the current editor state to the current split
+func (e *Editor) saveSplitState() {
+	if e.currentSplit < 0 || e.currentSplit >= len(e.splits) {
+		return
+	}
+
+	split := e.splits[e.currentSplit]
+
+	// Only save view state for buffer splits
+	if split.splitType == SplitBuffer {
+		split.cx = e.cx
+		split.cy = e.cy
+		split.rowOffset = e.rowOffset
+		split.colOffset = e.colOffset
+		split.wantX = e.wantX
+	}
 }
 
 // vsplit creates a vertical split
@@ -39,6 +114,15 @@ func (e *Editor) vsplit() {
 
 	currentSplit := e.splits[e.currentSplit]
 
+	// Can't split file tree
+	if currentSplit.splitType == SplitFileTree {
+		e.statusMsg = "cannot split file tree"
+		return
+	}
+
+	// Save current editor state to current split
+	e.saveSplitState()
+
 	// Need at least 10 columns per split
 	if currentSplit.width < 20 {
 		e.statusMsg = "not enough space for split"
@@ -49,13 +133,19 @@ func (e *Editor) vsplit() {
 	newWidth := currentSplit.width / 2
 	currentSplit.width = newWidth
 
-	// Create new split to the right
+	// Create new split to the right with same buffer but independent view state
 	newSplit := &Split{
+		splitType:   SplitBuffer,
 		bufferIndex: e.currentBuffer, // same buffer as current
-		width:       currentSplit.width - newWidth,
+		width:       newWidth,
 		height:      currentSplit.height,
 		x:           currentSplit.x + newWidth,
 		y:           currentSplit.y,
+		cx:          e.cx,
+		cy:          e.cy,
+		rowOffset:   e.rowOffset,
+		colOffset:   e.colOffset,
+		wantX:       e.wantX,
 	}
 
 	// Insert new split after current
@@ -76,6 +166,15 @@ func (e *Editor) split() {
 
 	currentSplit := e.splits[e.currentSplit]
 
+	// Can't split file tree
+	if currentSplit.splitType == SplitFileTree {
+		e.statusMsg = "cannot split file tree"
+		return
+	}
+
+	// Save current editor state to current split
+	e.saveSplitState()
+
 	// Need at least 6 rows per split
 	if currentSplit.height < 12 {
 		e.statusMsg = "not enough space for split"
@@ -86,13 +185,19 @@ func (e *Editor) split() {
 	newHeight := currentSplit.height / 2
 	currentSplit.height = newHeight
 
-	// Create new split below
+	// Create new split below with same buffer but independent view state
 	newSplit := &Split{
+		splitType:   SplitBuffer,
 		bufferIndex: e.currentBuffer, // same buffer as current
 		width:       currentSplit.width,
-		height:      currentSplit.height - newHeight,
+		height:      newHeight,
 		x:           currentSplit.x,
 		y:           currentSplit.y + newHeight,
+		cx:          e.cx,
+		cy:          e.cy,
+		rowOffset:   e.rowOffset,
+		colOffset:   e.colOffset,
+		wantX:       e.wantX,
 	}
 
 	// Insert new split after current
@@ -117,6 +222,12 @@ func (e *Editor) closeSplit() {
 		return
 	}
 
+	// Can't close file tree split
+	if e.splits[e.currentSplit].splitType == SplitFileTree {
+		e.statusMsg = "cannot close file tree (use :tree to toggle)"
+		return
+	}
+
 	// Remove current split
 	e.splits = append(e.splits[:e.currentSplit], e.splits[e.currentSplit+1:]...)
 
@@ -129,6 +240,9 @@ func (e *Editor) closeSplit() {
 	if e.currentSplit < 0 {
 		e.currentSplit = 0
 	}
+
+	// Load the new current split's state
+	e.loadSplitState()
 
 	// TODO: Redistribute space among remaining splits
 	e.redistributeSplitSpace()
@@ -170,8 +284,14 @@ func (e *Editor) nextSplit() {
 		return
 	}
 
+	// Save current split state before switching
+	e.saveSplitState()
+
 	e.currentSplit = (e.currentSplit + 1) % len(e.splits)
-	e.syncSplitToEditor()
+
+	// Load new split state
+	e.loadSplitState()
+
 	e.statusMsg = fmt.Sprintf("split %d/%d", e.currentSplit+1, len(e.splits))
 }
 
@@ -181,22 +301,184 @@ func (e *Editor) prevSplit() {
 		return
 	}
 
+	// Save current split state before switching
+	e.saveSplitState()
+
 	e.currentSplit--
 	if e.currentSplit < 0 {
 		e.currentSplit = len(e.splits) - 1
 	}
 
-	e.syncSplitToEditor()
+	// Load new split state
+	e.loadSplitState()
+
 	e.statusMsg = fmt.Sprintf("split %d/%d", e.currentSplit+1, len(e.splits))
 }
 
-// syncSplitToEditor loads split's buffer into editor
-func (e *Editor) syncSplitToEditor() {
+// moveSplitLeft moves focus to the split on the left
+func (e *Editor) moveSplitLeft() {
+	if len(e.splits) <= 1 {
+		return
+	}
+
+	current := e.splits[e.currentSplit]
+
+	// Find split to the left (same or overlapping Y, smaller X)
+	bestMatch := -1
+	bestX := -1
+
+	for i, split := range e.splits {
+		if i == e.currentSplit {
+			continue
+		}
+
+		// Check if Y ranges overlap
+		if split.y < current.y+current.height && split.y+split.height > current.y {
+			// This split's Y overlaps with current
+			if split.x < current.x && split.x > bestX {
+				bestMatch = i
+				bestX = split.x
+			}
+		}
+	}
+
+	if bestMatch != -1 {
+		e.saveSplitState()
+		e.currentSplit = bestMatch
+		e.loadSplitState()
+		e.statusMsg = fmt.Sprintf("split %d/%d", e.currentSplit+1, len(e.splits))
+	} else {
+		e.statusMsg = "no split to the left"
+	}
+}
+
+// moveSplitRight moves focus to the split on the right
+func (e *Editor) moveSplitRight() {
+	if len(e.splits) <= 1 {
+		return
+	}
+
+	current := e.splits[e.currentSplit]
+
+	// Find split to the right (same or overlapping Y, larger X)
+	bestMatch := -1
+	bestX := 999999
+
+	for i, split := range e.splits {
+		if i == e.currentSplit {
+			continue
+		}
+
+		// Check if Y ranges overlap
+		if split.y < current.y+current.height && split.y+split.height > current.y {
+			// This split's Y overlaps with current
+			if split.x > current.x && split.x < bestX {
+				bestMatch = i
+				bestX = split.x
+			}
+		}
+	}
+
+	if bestMatch != -1 {
+		e.saveSplitState()
+		e.currentSplit = bestMatch
+		e.loadSplitState()
+		e.statusMsg = fmt.Sprintf("split %d/%d", e.currentSplit+1, len(e.splits))
+	} else {
+		e.statusMsg = "no split to the right"
+	}
+}
+
+// moveSplitUp moves focus to the split above
+func (e *Editor) moveSplitUp() {
+	if len(e.splits) <= 1 {
+		return
+	}
+
+	current := e.splits[e.currentSplit]
+
+	// Find split above (same or overlapping X, smaller Y)
+	bestMatch := -1
+	bestY := -1
+
+	for i, split := range e.splits {
+		if i == e.currentSplit {
+			continue
+		}
+
+		// Check if X ranges overlap
+		if split.x < current.x+current.width && split.x+split.width > current.x {
+			// This split's X overlaps with current
+			if split.y < current.y && split.y > bestY {
+				bestMatch = i
+				bestY = split.y
+			}
+		}
+	}
+
+	if bestMatch != -1 {
+		e.saveSplitState()
+		e.currentSplit = bestMatch
+		e.loadSplitState()
+		e.statusMsg = fmt.Sprintf("split %d/%d", e.currentSplit+1, len(e.splits))
+	} else {
+		e.statusMsg = "no split above"
+	}
+}
+
+// moveSplitDown moves focus to the split below
+func (e *Editor) moveSplitDown() {
+	if len(e.splits) <= 1 {
+		return
+	}
+
+	current := e.splits[e.currentSplit]
+
+	// Find split below (same or overlapping X, larger Y)
+	bestMatch := -1
+	bestY := 999999
+
+	for i, split := range e.splits {
+		if i == e.currentSplit {
+			continue
+		}
+
+		// Check if X ranges overlap
+		if split.x < current.x+current.width && split.x+split.width > current.x {
+			// This split's X overlaps with current
+			if split.y > current.y && split.y < bestY {
+				bestMatch = i
+				bestY = split.y
+			}
+		}
+	}
+
+	if bestMatch != -1 {
+		e.saveSplitState()
+		e.currentSplit = bestMatch
+		e.loadSplitState()
+		e.statusMsg = fmt.Sprintf("split %d/%d", e.currentSplit+1, len(e.splits))
+	} else {
+		e.statusMsg = "no split below"
+	}
+}
+
+// loadSplitState loads view state from the current split to the editor
+func (e *Editor) loadSplitState() {
 	if len(e.splits) == 0 || e.currentSplit < 0 || e.currentSplit >= len(e.splits) {
 		return
 	}
 
 	split := e.splits[e.currentSplit]
+
+	// Handle file tree split
+	if split.splitType == SplitFileTree {
+		e.focusTree = true
+		return
+	}
+
+	// Handle buffer split
+	e.focusTree = false
 
 	// Switch to split's buffer if different
 	if split.bufferIndex != e.currentBuffer && split.bufferIndex < len(e.buffers) {
@@ -204,6 +486,18 @@ func (e *Editor) syncSplitToEditor() {
 		e.currentBuffer = split.bufferIndex
 		e.loadBufferState(e.buffers[e.currentBuffer])
 	}
+
+	// Load split's view state
+	e.cx = split.cx
+	e.cy = split.cy
+	e.rowOffset = split.rowOffset
+	e.colOffset = split.colOffset
+	e.wantX = split.wantX
+}
+
+// syncSplitToEditor is deprecated - use loadSplitState
+func (e *Editor) syncSplitToEditor() {
+	e.loadSplitState()
 }
 
 // saveCurrentBufferState saves the current editor state into the current buffer view
