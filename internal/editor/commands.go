@@ -76,6 +76,28 @@ func (e *Editor) exec(cmd string) bool {
 	case "noh", "nohlsearch":
 		e.searchMatches = nil
 		e.statusMsg = "search highlight cleared"
+	case "fold":
+		e.ToggleFold()
+	case "foldopen", "fo":
+		fold := e.findFoldAtLine(e.cy)
+		if fold != nil {
+			fold.folded = false
+			e.statusMsg = "unfolded"
+		} else {
+			e.statusMsg = "no fold at cursor"
+		}
+	case "foldclose", "fc":
+		fold := e.findFoldAtLine(e.cy)
+		if fold != nil {
+			fold.folded = true
+			e.statusMsg = "folded"
+		} else {
+			e.statusMsg = "no fold at cursor"
+		}
+	case "foldall", "fca":
+		e.FoldAll()
+	case "unfoldall", "ufa":
+		e.UnfoldAll()
 	case "set":
 		// Show current filetype and settings
 		ft := e.getFiletype()

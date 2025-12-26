@@ -196,6 +196,10 @@ type Editor struct {
 	splits         []*Split // list of splits
 	currentSplit   int      // index of focused split
 	awaitingWindow bool     // waiting for window command after Ctrl+W
+
+	// folding
+	foldRanges map[int]*FoldRange // map of start line to fold range
+	parser     *TreeSitterParser  // tree-sitter parser for current buffer
 }
 
 func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (*Editor, error) {
@@ -382,5 +386,12 @@ func (e *Editor) syncFromBuffer() {
 		e.marks = b.marks
 		e.jumpList = b.jumpList
 		e.jumpListIndex = b.jumpListIndex
+		e.parser = b.parser
+		
+		// Initialize fold ranges if parser exists
+		if e.parser != nil && e.foldRanges == nil {
+			e.foldRanges = make(map[int]*FoldRange)
+			e.UpdateFoldStates()
+		}
 	}
 }

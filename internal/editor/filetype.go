@@ -217,6 +217,9 @@ func (e *Editor) initTreeSitterParser() {
 	}
 
 	bv.parser = parser
+
+	// Initialize fold ranges
+	e.UpdateFoldStates()
 }
 
 // reparseBuffer re-parses the buffer after modifications
@@ -228,6 +231,9 @@ func (e *Editor) reparseBuffer() {
 
 	content := e.buffer.String()
 	bv.parser.Parse(content)
+
+	// Update fold states after reparse
+	e.UpdateFoldStates()
 }
 
 // getCommentPrefix returns the comment prefix for the current filetype

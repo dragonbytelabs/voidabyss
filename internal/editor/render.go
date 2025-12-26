@@ -68,9 +68,9 @@ func (e *Editor) draw() {
 	lineNumWidth := 0
 	if e.config != nil && e.config.ShowLineNumbers {
 		totalLines := e.lineCount()
-		lineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 1 // +1 for spacing
-		if lineNumWidth < 4 {
-			lineNumWidth = 4
+		lineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 2 // +2 for fold indicator and spacing
+		if lineNumWidth < 5 {
+			lineNumWidth = 5
 		}
 	}
 
@@ -92,36 +92,47 @@ func (e *Editor) draw() {
 	}
 
 	// Draw buffer content
-	for y := 0; y < h-1; y++ {
-		lineIndex := e.rowOffset + y
-		if lineIndex >= e.lineCount() {
-			break
+	visualLine := 0
+	actualLine := e.rowOffset
+	for visualLine < h-1 && actualLine < e.lineCount() {
+		// Skip folded lines
+		if e.isLineFolded(actualLine) {
+			actualLine++
+			continue
 		}
 
-		// Draw line number
+		lineIndex := actualLine
+
+		// Draw line number with fold indicator
 		if lineNumWidth > 0 {
 			var lineNum string
 			if e.config.RelativeLineNums {
 				// Relative line numbers
 				diff := lineIndex - e.cy
 				if diff == 0 {
-					lineNum = fmt.Sprintf("%*d", lineNumWidth-1, lineIndex+1)
+					lineNum = fmt.Sprintf("%*d", lineNumWidth-2, lineIndex+1)
 				} else {
 					if diff < 0 {
 						diff = -diff
 					}
-					lineNum = fmt.Sprintf("%*d", lineNumWidth-1, diff)
+					lineNum = fmt.Sprintf("%*d", lineNumWidth-2, diff)
 				}
 			} else {
 				// Absolute line numbers
-				lineNum = fmt.Sprintf("%*d", lineNumWidth-1, lineIndex+1)
+				lineNum = fmt.Sprintf("%*d", lineNumWidth-2, lineIndex+1)
 			}
 
+			// Draw line number
 			for i, r := range lineNum {
-				e.s.SetContent(contentStartX+i, y, r, nil, lineNumStyle)
+				e.s.SetContent(contentStartX+i, visualLine, r, nil, lineNumStyle)
 			}
+
+			// Draw fold indicator
+			foldIndicator := e.getFoldIndicator(lineIndex)
+			e.s.SetContent(contentStartX+lineNumWidth-2, visualLine, []rune(foldIndicator)[0], nil, lineNumStyle)
+
 			// Add spacing after line number
-			e.s.SetContent(contentStartX+lineNumWidth-1, y, ' ', nil, style)
+			e.s.SetContent(contentStartX+lineNumWidth-1, visualLine, ' ', nil, style)
 		}
 
 		runes := []rune(e.getLine(lineIndex))
@@ -155,8 +166,11 @@ func (e *Editor) draw() {
 				cellStyle = highlightStyle
 			}
 
-			e.s.SetContent(textStartX+x, y, visible[x], nil, cellStyle)
+			e.s.SetContent(textStartX+x, visualLine, visible[x], nil, cellStyle)
 		}
+
+		visualLine++
+		actualLine++
 	}
 
 	e.drawStatus(w, h)
@@ -169,9 +183,9 @@ func (e *Editor) draw() {
 	cursorLineNumWidth := 0
 	if e.config != nil && e.config.ShowLineNumbers {
 		totalLines := e.lineCount()
-		cursorLineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 1
-		if cursorLineNumWidth < 4 {
-			cursorLineNumWidth = 4
+		cursorLineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 2 // +2 for fold indicator and spacing
+		if cursorLineNumWidth < 5 {
+			cursorLineNumWidth = 5
 		}
 	}
 

@@ -386,6 +386,44 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 			return
 		}
 
+		// folding commands (z prefix)
+		if op == 'z' {
+			e.pendingOp = 0
+			e.pendingOpCount = 0
+			switch r {
+			case 'a':
+				// za - toggle fold
+				e.ToggleFold()
+			case 'c':
+				// zc - close fold
+				fold := e.findFoldAtLine(e.cy)
+				if fold != nil {
+					fold.folded = true
+					e.statusMsg = "folded"
+				} else {
+					e.statusMsg = "no fold at cursor"
+				}
+			case 'o':
+				// zo - open fold
+				fold := e.findFoldAtLine(e.cy)
+				if fold != nil {
+					fold.folded = false
+					e.statusMsg = "unfolded"
+				} else {
+					e.statusMsg = "no fold at cursor"
+				}
+			case 'M':
+				// zM - fold all
+				e.FoldAll()
+			case 'R':
+				// zR - unfold all
+				e.UnfoldAll()
+			default:
+				e.statusMsg = "unknown fold command: z" + string(r)
+			}
+			return
+		}
+
 		e.applyOperatorMotion(op, r, cnt)
 		return
 	}
@@ -586,6 +624,12 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.visualEnter(VisualChar)
 	case 'V':
 		e.visualEnter(VisualLine)
+
+	// folding
+	case 'z':
+		// Wait for second character
+		e.pendingOp = 'z'
+		e.pendingOpCount = e.consumeCountOr1()
 
 	default:
 		log.Printf("unknown normal key: %q", r)
