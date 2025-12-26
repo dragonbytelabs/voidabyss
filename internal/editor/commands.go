@@ -92,6 +92,8 @@ func (e *Editor) exec(cmd string) bool {
 		e.statusMsg = "closed all other splits"
 	case "Explore", "Ex":
 		e.toggleFileTree()
+	case "tree":
+		e.toggleFileTree()
 	case "reg", "registers":
 		e.popupFixedH = 10
 		e.openPopup("REGISTERS", e.formatRegisters())

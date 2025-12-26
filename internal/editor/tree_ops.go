@@ -6,6 +6,8 @@ func (e *Editor) toggleFileTree() {
 		e.treeOpen = false
 		e.focusTree = false
 		e.statusMsg = "file tree closed"
+		// Reinitialize splits without file tree
+		e.initSplits()
 	} else {
 		// Create file tree if not exists
 		if e.fileTree == nil {
@@ -26,6 +28,8 @@ func (e *Editor) toggleFileTree() {
 		e.treeOpen = true
 		e.focusTree = true
 		e.statusMsg = "file tree opened"
+		// Reinitialize splits with file tree
+		e.initSplits()
 	}
 }
 
@@ -77,7 +81,35 @@ func (e *Editor) handleTreeInput(key rune) {
 			} else {
 				// Open file in buffer
 				e.openFile(node.path)
+				// Reset view to top-left of file when opening from tree
+				// (do this after openFile which may have loaded old offsets)
+				e.cx = 0
+				e.cy = 0
+				e.rowOffset = 0
+				e.colOffset = 0
+				e.wantX = 0
+				// Also update the buffer's saved state
+				if bv := e.buf(); bv != nil {
+					bv.cx = 0
+					bv.cy = 0
+					bv.rowOffset = 0
+					bv.colOffset = 0
+					bv.wantX = 0
+				}
 				e.focusTree = false
+				// Switch to the buffer split (find first buffer split)
+				for i, split := range e.splits {
+					if split.splitType == SplitBuffer {
+						e.currentSplit = i
+						// Update split's view state with reset positions
+						split.cx = 0
+						split.cy = 0
+						split.rowOffset = 0
+						split.colOffset = 0
+						split.wantX = 0
+						break
+					}
+				}
 				e.statusMsg = "opened " + node.name
 			}
 		}

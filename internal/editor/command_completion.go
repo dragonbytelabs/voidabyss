@@ -32,6 +32,7 @@ func (e *Editor) getAllCommands() []string {
 		"colorscheme", "colorschemes",
 		"set",
 		"help",
+		"tree",
 	}
 }
 

@@ -230,12 +230,12 @@ func (e *Editor) draw() {
 		// Determine position based on split type
 		var splitX, splitY int
 		if split.splitType == SplitFileTree {
-			// File tree split is always at x=0
+			// File tree split uses its x position directly
 			splitX = split.x
 			splitY = split.y
 		} else {
-			// Buffer splits are adjusted for file tree if present
-			splitX = contentStartX + split.x
+			// Buffer splits use their x position directly (already accounts for tree in initSplits)
+			splitX = split.x
 			splitY = split.y
 		}
 
@@ -339,7 +339,7 @@ func (e *Editor) draw() {
 		}
 
 		// Calculate cursor position within the split
-		splitX := contentStartX + split.x
+		splitX := split.x
 		screenX := e.cx - e.colOffset + splitX + cursorLineNumWidth
 		screenY := e.cy - e.rowOffset + split.y
 

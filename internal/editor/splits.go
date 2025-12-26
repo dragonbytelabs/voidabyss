@@ -25,6 +25,11 @@ type Split struct {
 	rowOffset int // scroll offset
 	colOffset int // scroll offset
 	wantX     int // desired x position for vertical movement
+
+	// Visual mode state (only for SplitBuffer)
+	visualActive bool
+	visualAnchor int
+	visualKind   VisualKind
 }
 
 // initSplits initializes the split system with a single split
@@ -57,7 +62,7 @@ func (e *Editor) initSplits() {
 				bufferIndex: e.currentBuffer,
 				width:       w - treeWidth - 1, // -1 for border
 				height:      height,
-				x:           treeWidth + 1,
+				x:           treeWidth + 1, // actual screen position for navigation
 				y:           0,
 				cx:          e.cx,
 				cy:          e.cy,
@@ -102,6 +107,10 @@ func (e *Editor) saveSplitState() {
 		split.rowOffset = e.rowOffset
 		split.colOffset = e.colOffset
 		split.wantX = e.wantX
+		// Save visual mode state
+		split.visualActive = e.visualActive
+		split.visualAnchor = e.visualAnchor
+		split.visualKind = e.visualKind
 	}
 }
 
@@ -135,17 +144,20 @@ func (e *Editor) vsplit() {
 
 	// Create new split to the right with same buffer but independent view state
 	newSplit := &Split{
-		splitType:   SplitBuffer,
-		bufferIndex: e.currentBuffer, // same buffer as current
-		width:       newWidth,
-		height:      currentSplit.height,
-		x:           currentSplit.x + newWidth,
-		y:           currentSplit.y,
-		cx:          e.cx,
-		cy:          e.cy,
-		rowOffset:   e.rowOffset,
-		colOffset:   e.colOffset,
-		wantX:       e.wantX,
+		splitType:    SplitBuffer,
+		bufferIndex:  e.currentBuffer, // same buffer as current
+		width:        newWidth,
+		height:       currentSplit.height,
+		x:            currentSplit.x + newWidth,
+		y:            currentSplit.y,
+		cx:           e.cx,
+		cy:           e.cy,
+		rowOffset:    e.rowOffset,
+		colOffset:    e.colOffset,
+		wantX:        e.wantX,
+		visualActive: e.visualActive,
+		visualAnchor: e.visualAnchor,
+		visualKind:   e.visualKind,
 	}
 
 	// Insert new split after current
@@ -187,17 +199,20 @@ func (e *Editor) split() {
 
 	// Create new split below with same buffer but independent view state
 	newSplit := &Split{
-		splitType:   SplitBuffer,
-		bufferIndex: e.currentBuffer, // same buffer as current
-		width:       currentSplit.width,
-		height:      newHeight,
-		x:           currentSplit.x,
-		y:           currentSplit.y + newHeight,
-		cx:          e.cx,
-		cy:          e.cy,
-		rowOffset:   e.rowOffset,
-		colOffset:   e.colOffset,
-		wantX:       e.wantX,
+		splitType:    SplitBuffer,
+		bufferIndex:  e.currentBuffer, // same buffer as current
+		width:        currentSplit.width,
+		height:       newHeight,
+		x:            currentSplit.x,
+		y:            currentSplit.y + newHeight,
+		cx:           e.cx,
+		cy:           e.cy,
+		rowOffset:    e.rowOffset,
+		colOffset:    e.colOffset,
+		wantX:        e.wantX,
+		visualActive: e.visualActive,
+		visualAnchor: e.visualAnchor,
+		visualKind:   e.visualKind,
 	}
 
 	// Insert new split after current
@@ -493,6 +508,11 @@ func (e *Editor) loadSplitState() {
 	e.rowOffset = split.rowOffset
 	e.colOffset = split.colOffset
 	e.wantX = split.wantX
+
+	// Load visual mode state
+	e.visualActive = split.visualActive
+	e.visualAnchor = split.visualAnchor
+	e.visualKind = split.visualKind
 }
 
 // syncSplitToEditor is deprecated - use loadSplitState

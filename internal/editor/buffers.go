@@ -23,9 +23,18 @@ func (e *Editor) openFile(path string) {
 			e.currentBuffer = i
 			e.syncFromBuffer() // load new buffer state
 
-			// Update current split to point to this buffer
-			if len(e.splits) > 0 && e.currentSplit >= 0 && e.currentSplit < len(e.splits) {
-				e.splits[e.currentSplit].bufferIndex = i
+			// Find and update the buffer split (not the current split which might be the tree)
+			for _, split := range e.splits {
+				if split.splitType == SplitBuffer {
+					split.bufferIndex = i
+					// Update split's view state from editor's current state
+					split.cx = e.cx
+					split.cy = e.cy
+					split.rowOffset = e.rowOffset
+					split.colOffset = e.colOffset
+					split.wantX = e.wantX
+					break
+				}
 			}
 
 			e.FireBufEnter()
@@ -49,9 +58,18 @@ func (e *Editor) openFile(path string) {
 	e.currentBuffer = len(e.buffers) - 1
 	e.syncFromBuffer() // load new buffer state
 
-	// Update current split to point to the new buffer
-	if len(e.splits) > 0 && e.currentSplit >= 0 && e.currentSplit < len(e.splits) {
-		e.splits[e.currentSplit].bufferIndex = e.currentBuffer
+	// Find and update the buffer split (not the current split which might be the tree)
+	for _, split := range e.splits {
+		if split.splitType == SplitBuffer {
+			split.bufferIndex = e.currentBuffer
+			// Update split's view state from editor's current state
+			split.cx = e.cx
+			split.cy = e.cy
+			split.rowOffset = e.rowOffset
+			split.colOffset = e.colOffset
+			split.wantX = e.wantX
+			break
+		}
 	}
 
 	e.FireBufNew()
