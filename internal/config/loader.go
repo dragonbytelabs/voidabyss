@@ -35,13 +35,17 @@ func (l *Loader) Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	l.extractLegacyPlugins()
+	l.ExtractLegacyPlugins()
+
+	// Load plugins after config
+	pluginResults := l.LoadPlugins()
+	l.config.LoadedPlugins = pluginResults
 
 	return l.config, nil
 }
 
-// extractLegacyPlugins extracts plugins from vb.plugins table for backwards compatibility
-func (l *Loader) extractLegacyPlugins() {
+// ExtractLegacyPlugins extracts plugins from vb.plugins table for backwards compatibility
+func (l *Loader) ExtractLegacyPlugins() {
 	vb := l.L.GetGlobal("vb")
 	if vb == lua.LNil {
 		return

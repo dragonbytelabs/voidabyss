@@ -62,7 +62,7 @@ vb.plugins = {"plugin1"}
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	loader.extractLegacyPlugins()
+	loader.ExtractLegacyPlugins()
 	cfg := loader.config
 
 	if cfg.Options.TabWidth != 8 {

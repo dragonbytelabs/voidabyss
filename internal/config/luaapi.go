@@ -759,6 +759,25 @@ func (l *Loader) luaCheckHealth(L *lua.LState) int {
 		}
 	}
 
+	// Plugin info
+	output.WriteString("\n=== Plugins ===\n")
+	if len(l.config.LoadedPlugins) == 0 {
+		output.WriteString("  No plugins loaded\n")
+	} else {
+		loaded := 0
+		failed := 0
+		for _, plugin := range l.config.LoadedPlugins {
+			if plugin.Loaded {
+				loaded++
+				output.WriteString(fmt.Sprintf("  ✓ %s\n", plugin.Name))
+			} else {
+				failed++
+				output.WriteString(fmt.Sprintf("  ✗ %s: %s\n", plugin.Name, plugin.Error))
+			}
+		}
+		output.WriteString(fmt.Sprintf("\n  Summary: %d loaded, %d failed\n", loaded, failed))
+	}
+
 	output.WriteString("\n")
 
 	// Print to stdout (visible in editor)

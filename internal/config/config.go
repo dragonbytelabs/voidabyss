@@ -16,6 +16,7 @@ type Config struct {
 	Commands      []Command
 	EventHandlers []EventHandler
 	Plugins       []string
+	LoadedPlugins []PluginInfo
 	PluginDir     string
 	State         *State
 
