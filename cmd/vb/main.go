@@ -60,7 +60,7 @@ func runEditor(path string) {
 	}
 
 	if runErr != nil {
-		fmt.Fprintf(os.Stderr, "voidabyss error: %v\n", runErr)
+    		fmt.Fprintf(os.Stderr, "voidabyss error: %v\n", runErr)
 		os.Exit(2)
 	}
 

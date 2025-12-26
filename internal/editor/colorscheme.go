@@ -188,6 +188,93 @@ var colorSchemes = map[string]*ColorScheme{
 		TreeCursorBg:  tcell.NewRGBColor(68, 71, 90),
 		TreeBorder:    tcell.NewRGBColor(98, 114, 164),
 	},
+	"rose-pine": {
+		Name:          "rose-pine",
+		Background:    tcell.NewRGBColor(25, 23, 36),    // base
+		Foreground:    tcell.NewRGBColor(224, 222, 244), // text
+		LineNumber:    tcell.NewRGBColor(110, 106, 134), // muted
+		StatusLine:    tcell.NewRGBColor(224, 222, 244), // text
+		StatusLineBg:  tcell.NewRGBColor(35, 33, 54),    // surface
+		Visual:        tcell.NewRGBColor(224, 222, 244), // text
+		VisualBg:      tcell.NewRGBColor(42, 39, 63),    // highlight med
+		Search:        tcell.NewRGBColor(25, 23, 36),    // base
+		SearchBg:      tcell.NewRGBColor(246, 193, 119), // gold
+		Cursor:        tcell.NewRGBColor(25, 23, 36),    // base
+		CursorBg:      tcell.NewRGBColor(235, 188, 186), // rose
+		Keyword:       tcell.NewRGBColor(234, 154, 151), // love
+		Function:      tcell.NewRGBColor(156, 207, 216), // foam
+		Type:          tcell.NewRGBColor(249, 226, 175), // gold
+		String:        tcell.NewRGBColor(246, 193, 119), // gold
+		Number:        tcell.NewRGBColor(235, 188, 186), // rose
+		Comment:       tcell.NewRGBColor(110, 106, 134), // muted
+		Constant:      tcell.NewRGBColor(235, 111, 146), // love
+		Property:      tcell.NewRGBColor(156, 207, 216), // foam
+		Operator:      tcell.NewRGBColor(144, 140, 170), // subtle
+		Variable:      tcell.NewRGBColor(224, 222, 244), // text
+		TreeDirectory: tcell.NewRGBColor(156, 207, 216), // foam
+		TreeFile:      tcell.NewRGBColor(224, 222, 244), // text
+		TreeCursor:    tcell.NewRGBColor(224, 222, 244), // text
+		TreeCursorBg:  tcell.NewRGBColor(42, 39, 63),    // highlight med
+		TreeBorder:    tcell.NewRGBColor(110, 106, 134), // muted
+	},
+	"rose-pine-moon": {
+		Name:          "rose-pine-moon",
+		Background:    tcell.NewRGBColor(35, 33, 54),    // base
+		Foreground:    tcell.NewRGBColor(224, 222, 244), // text
+		LineNumber:    tcell.NewRGBColor(110, 106, 134), // muted
+		StatusLine:    tcell.NewRGBColor(224, 222, 244), // text
+		StatusLineBg:  tcell.NewRGBColor(42, 39, 63),    // surface
+		Visual:        tcell.NewRGBColor(224, 222, 244), // text
+		VisualBg:      tcell.NewRGBColor(57, 53, 82),    // highlight med
+		Search:        tcell.NewRGBColor(35, 33, 54),    // base
+		SearchBg:      tcell.NewRGBColor(246, 193, 119), // gold
+		Cursor:        tcell.NewRGBColor(35, 33, 54),    // base
+		CursorBg:      tcell.NewRGBColor(235, 188, 186), // rose
+		Keyword:       tcell.NewRGBColor(234, 154, 151), // love
+		Function:      tcell.NewRGBColor(156, 207, 216), // foam
+		Type:          tcell.NewRGBColor(249, 226, 175), // gold
+		String:        tcell.NewRGBColor(246, 193, 119), // gold
+		Number:        tcell.NewRGBColor(235, 188, 186), // rose
+		Comment:       tcell.NewRGBColor(110, 106, 134), // muted
+		Constant:      tcell.NewRGBColor(235, 111, 146), // love
+		Property:      tcell.NewRGBColor(156, 207, 216), // foam
+		Operator:      tcell.NewRGBColor(144, 140, 170), // subtle
+		Variable:      tcell.NewRGBColor(224, 222, 244), // text
+		TreeDirectory: tcell.NewRGBColor(156, 207, 216), // foam
+		TreeFile:      tcell.NewRGBColor(224, 222, 244), // text
+		TreeCursor:    tcell.NewRGBColor(224, 222, 244), // text
+		TreeCursorBg:  tcell.NewRGBColor(57, 53, 82),    // highlight med
+		TreeBorder:    tcell.NewRGBColor(110, 106, 134), // muted
+	},
+	"rose-pine-dawn": {
+		Name:          "rose-pine-dawn",
+		Background:    tcell.NewRGBColor(250, 244, 237), // base
+		Foreground:    tcell.NewRGBColor(87, 82, 121),   // text
+		LineNumber:    tcell.NewRGBColor(152, 147, 165), // muted
+		StatusLine:    tcell.NewRGBColor(87, 82, 121),   // text
+		StatusLineBg:  tcell.NewRGBColor(255, 250, 243), // surface
+		Visual:        tcell.NewRGBColor(87, 82, 121),   // text
+		VisualBg:      tcell.NewRGBColor(242, 233, 222), // highlight med
+		Search:        tcell.NewRGBColor(250, 244, 237), // base
+		SearchBg:      tcell.NewRGBColor(234, 157, 52),  // gold
+		Cursor:        tcell.NewRGBColor(250, 244, 237), // base
+		CursorBg:      tcell.NewRGBColor(215, 130, 126), // rose
+		Keyword:       tcell.NewRGBColor(180, 99, 122),  // love
+		Function:      tcell.NewRGBColor(86, 148, 159),  // foam
+		Type:          tcell.NewRGBColor(234, 157, 52),  // gold
+		String:        tcell.NewRGBColor(234, 157, 52),  // gold
+		Number:        tcell.NewRGBColor(215, 130, 126), // rose
+		Comment:       tcell.NewRGBColor(152, 147, 165), // muted
+		Constant:      tcell.NewRGBColor(180, 99, 122),  // love
+		Property:      tcell.NewRGBColor(86, 148, 159),  // foam
+		Operator:      tcell.NewRGBColor(121, 117, 147), // subtle
+		Variable:      tcell.NewRGBColor(87, 82, 121),   // text
+		TreeDirectory: tcell.NewRGBColor(86, 148, 159),  // foam
+		TreeFile:      tcell.NewRGBColor(87, 82, 121),   // text
+		TreeCursor:    tcell.NewRGBColor(87, 82, 121),   // text
+		TreeCursorBg:  tcell.NewRGBColor(242, 233, 222), // highlight med
+		TreeBorder:    tcell.NewRGBColor(152, 147, 165), // muted
+	},
 }
 
 // GetColorScheme returns the color scheme by name, or default if not found

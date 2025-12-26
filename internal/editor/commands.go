@@ -14,8 +14,23 @@ func (e *Editor) exec(cmd string) bool {
 		return false
 	}
 
-	// Handle :colorscheme <name>
-	if len(cmd) > 12 && cmd[0:12] == "colorscheme " {
+	// Handle :colorscheme [name]
+	if cmd == "colorscheme" || (len(cmd) > 12 && cmd[0:12] == "colorscheme ") {
+		if cmd == "colorscheme" {
+			// Show available schemes
+			schemes := ListColorSchemes()
+			lines := make([]string, 0, len(schemes))
+			for _, name := range schemes {
+				marker := " "
+				if name == e.config.ColorScheme {
+					marker = "*"
+				}
+				lines = append(lines, fmt.Sprintf("%s %s", marker, name))
+			}
+			e.popupFixedH = 10
+			e.openPopup("COLOR SCHEMES", lines)
+			return false
+		}
 		schemeName := cmd[12:]
 		scheme := GetColorScheme(schemeName)
 		e.ApplyColorScheme(scheme)
