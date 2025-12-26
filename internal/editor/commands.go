@@ -1,8 +1,8 @@
 package editor
 
 import (
-	"os"
-	"path/filepath"
+"os"
+"path/filepath"
 )
 
 func (e *Editor) exec(cmd string) bool {
@@ -59,6 +59,9 @@ func (e *Editor) exec(cmd string) bool {
 }
 
 func (e *Editor) save() {
+	// Fire BufWritePre event
+	e.FireBufWritePre()
+
 	outPath := e.filename
 	if info, err := os.Stat(outPath); err == nil && info.IsDir() {
 		outPath = filepath.Join(outPath, "out.txt")
@@ -66,4 +69,7 @@ func (e *Editor) save() {
 	_ = os.WriteFile(outPath, []byte(e.buffer.String()), 0644)
 	e.dirty = false
 	e.statusMsg = "written"
+
+	// Fire BufWritePost event
+	e.FireBufWritePost()
 }

@@ -21,6 +21,24 @@ const (
 	ModeSearch
 )
 
+// string returns the string representation of a Mode
+func (m Mode) string() string {
+	switch m {
+	case ModeNormal:
+		return "normal"
+	case ModeInsert:
+		return "insert"
+	case ModeCommand:
+		return "command"
+	case ModeVisual:
+		return "visual"
+	case ModeSearch:
+		return "search"
+	default:
+		return "unknown"
+	}
+}
+
 type RegisterKind int
 
 const (

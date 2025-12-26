@@ -29,6 +29,11 @@ func OpenFile(path string) error {
 			loader.Close()
 		}
 	}()
+
+	// Fire events after initialization
+	ed.FireEditorReady()
+	ed.FireBufRead()
+
 	return ed.run()
 }
 
@@ -51,5 +56,10 @@ func OpenProject(path string) error {
 			loader.Close()
 		}
 	}()
+
+	// Fire events after initialization
+	ed.FireEditorReady()
+	ed.FireBufRead()
+
 	return ed.run()
 }
