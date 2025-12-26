@@ -637,11 +637,47 @@ func luaToGo(value lua.LValue) interface{} {
 	case lua.LBool:
 		return bool(v)
 	case *lua.LTable:
-		// Try to determine if it's an array or map
+		// Detect if this is an array (consecutive integer keys from 1..n)
+		maxN := v.MaxN()
+		if maxN > 0 {
+			// Check if all keys are integers from 1 to maxN
+			isArray := true
+			for i := 1; i <= maxN; i++ {
+				if v.RawGetInt(i) == lua.LNil {
+					isArray = false
+					break
+				}
+			}
+
+			// Also check that there are no string keys
+			if isArray {
+				hasStringKeys := false
+				v.ForEach(func(key, val lua.LValue) {
+					if _, ok := key.(lua.LString); ok {
+						hasStringKeys = true
+					}
+				})
+				isArray = !hasStringKeys
+			}
+
+			if isArray {
+				// Convert to []interface{}
+				result := make([]interface{}, maxN)
+				for i := 1; i <= maxN; i++ {
+					result[i-1] = luaToGo(v.RawGetInt(i))
+				}
+				return result
+			}
+		}
+
+		// Convert to map[string]interface{}
 		result := make(map[string]interface{})
 		v.ForEach(func(key, val lua.LValue) {
 			if keyStr, ok := key.(lua.LString); ok {
 				result[string(keyStr)] = luaToGo(val)
+			} else if keyNum, ok := key.(lua.LNumber); ok {
+				// Handle numeric keys as strings in maps
+				result[keyNum.String()] = luaToGo(val)
 			}
 		})
 		return result
@@ -660,6 +696,13 @@ func goToLua(L *lua.LState, value interface{}) lua.LValue {
 		return lua.LNumber(v)
 	case bool:
 		return lua.LBool(v)
+	case []interface{}:
+		// Convert Go slice to Lua array-style table
+		tbl := L.NewTable()
+		for i, val := range v {
+			tbl.RawSetInt(i+1, goToLua(L, val)) // Lua arrays are 1-indexed
+		}
+		return tbl
 	case map[string]interface{}:
 		tbl := L.NewTable()
 		for key, val := range v {
