@@ -96,6 +96,10 @@ func (e *Editor) exec(cmd string) bool {
 		e.popupFixedH = 10
 		e.openPopup("REGISTERS", e.formatRegisters())
 		return false
+	case "macros":
+		e.popupFixedH = 10
+		e.openPopup("MACROS", e.formatMacros())
+		return false
 	case "noh", "nohlsearch":
 		e.searchMatches = nil
 		e.statusMsg = "search highlight cleared"

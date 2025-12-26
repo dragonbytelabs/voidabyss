@@ -170,6 +170,14 @@ type Editor struct {
 	awaitingMarkSet  bool // waiting for mark name after 'm'
 	awaitingMarkJump rune // waiting for mark name after ' or `
 
+	// macros
+	recordingMacro    bool           // true when recording a macro
+	recordingRegister rune           // register being recorded to (a-z)
+	macroKeys         []MacroKey     // keys being recorded
+	macros            map[rune]Macro // stored macros (a-z)
+	playingMacro      bool           // true when playing back a macro
+	awaitingMacroPlay rune           // waiting for register after @
+
 	// configuration
 	indentWidth int            // number of spaces for indentation
 	config      *config.Config // user configuration
@@ -244,6 +252,7 @@ func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (
 		foldRanges:    make(map[int]*FoldRange),
 	}
 	ed.regs.named = make(map[rune]Register)
+	ed.macros = make(map[rune]Macro)
 	ed.syncFromBuffer()
 
 	// Initialize splits
@@ -311,6 +320,7 @@ func newEditorFromProject(path string, cfg *config.Config, loader *config.Loader
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.marks = make(map[rune]Mark)
+	ed.macros = make(map[rune]Macro)
 	ed.jumpList = make([]JumpListEntry, 0, 100)
 	ed.jumpListIndex = -1
 

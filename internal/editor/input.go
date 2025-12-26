@@ -9,6 +9,18 @@ import (
 )
 
 func (e *Editor) handleKey(k *tcell.EventKey) bool {
+	// Record key for macro (do this early, before processing)
+	// Record in ALL modes (normal, insert, visual), but skip the 'q' that stops recording
+	if e.recordingMacro {
+		// Skip the 'q' that stops recording (only in normal mode)
+		if e.mode == ModeNormal && k.Key() == tcell.KeyRune && k.Rune() == 'q' &&
+			e.awaitingMacroPlay == 0 && e.pendingOp == 0 {
+			// This 'q' will stop recording, don't record it
+		} else {
+			e.recordKey(k)
+		}
+	}
+
 	// Handle window commands (Ctrl+W prefix)
 	if e.awaitingWindow && k.Key() == tcell.KeyRune {
 		e.awaitingWindow = false
@@ -225,7 +237,10 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		return
 	}
 
-	e.statusMsg = ""
+	// Don't clear statusMsg if we're awaiting register for macro recording
+	if e.statusMsg != "record macro to register: " && e.statusMsg != "play macro from register: " {
+		e.statusMsg = ""
+	}
 	r := k.Rune()
 
 	// mark setting (m)
@@ -245,6 +260,14 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		case '`':
 			e.jumpToMarkExact(r)
 		}
+		return
+	}
+
+	// macro playback (@)
+	if e.awaitingMacroPlay != 0 {
+		e.awaitingMacroPlay = 0
+		count := e.consumeCountOr1()
+		e.playbackMacro(r, count)
 		return
 	}
 
@@ -276,10 +299,25 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 
 	// register selection
 	if e.awaitingRegister {
+		// Check if this is for macro recording (check this FIRST!)
+		if e.statusMsg == "record macro to register: " {
+			e.awaitingRegister = false
+			e.startRecording(r)
+			return
+		}
+
+		// Check if this is for macro playback
+		if e.awaitingMacroPlay != 0 {
+			// This is handled elsewhere
+			return
+		}
+
+		// Otherwise, it's for yank/paste register
+		// DEBUG: We get here when statusMsg doesn't match
 		if isRegisterName(r) {
 			e.regOverride = r
 			e.regOverrideSet = true
-			e.statusMsg = ""
+			e.statusMsg = "" // This clears the statusMsg
 		} else {
 			e.statusMsg = fmt.Sprintf("invalid register: %c", r)
 			e.regOverrideSet = false
@@ -444,6 +482,19 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.repeatLast()
 		return
 
+	case 'q':
+		if e.recordingMacro {
+			e.stopRecording()
+		} else {
+			e.awaitingRegister = true
+			e.statusMsg = "record macro to register: "
+		}
+		return
+	case '@':
+		e.awaitingMacroPlay = '@'
+		e.statusMsg = "play macro from register: "
+		return
+
 	case 'h':
 		e.moveLeft(e.consumeCountOr1())
 	case 'j':
@@ -479,6 +530,13 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 	case 'i':
 		e.insertCapture = nil
 		e.last = RepeatAction{kind: RepeatInsert, insertCmd: 'i'}
+		e.buffer.BeginUndoGroup()
+		e.mode = ModeInsert
+	case 'I':
+		e.cx = 0
+		e.wantX = 0
+		e.insertCapture = nil
+		e.last = RepeatAction{kind: RepeatInsert, insertCmd: 'I'}
 		e.buffer.BeginUndoGroup()
 		e.mode = ModeInsert
 	case 'a':

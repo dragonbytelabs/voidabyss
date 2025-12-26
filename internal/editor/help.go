@@ -13,6 +13,7 @@ var helpTopics = map[string]string{
 	"vim-differences": helpVimDifferences,
 	"completion":      helpCompletion,
 	"undo":            helpUndo,
+	"macros":          helpMacros,
 }
 
 const helpMain = `VOIDABYSS HELP - A Vim-inspired modal text editor
@@ -25,6 +26,7 @@ QUICK START
   :help events            - Event system
   :help completion        - Word completion
   :help undo              - Undo system
+  :help macros            - Macro recording/playback
 
 BASIC COMMANDS
   :e file     - Open file
@@ -80,6 +82,8 @@ Normal Mode:
   dd yy p     - Delete, yank, paste
   u Ctrl-R    - Undo, redo
   / n N       - Search
+  q{a-z}      - Record macro
+  @{a-z}      - Play macro
 
 Insert Mode:
   Esc         - Exit insert
@@ -89,6 +93,7 @@ Commands:
   :w :q :wq   - Save, quit
   :e file     - Open file
   :bn :bp     - Next/prev buffer
+  :macros     - View recorded macros
 `
 
 const helpVimDifferences = `DIFFERENCES FROM VIM
@@ -101,12 +106,44 @@ Similar to Vim:
 
 Different from Vim:
   - Lua configuration (not Vimscript)
-  - No splits/tabs/windows
-  - No macros yet
+  - Basic splits (no full window management yet)
+  - No tabs yet
   - Simpler plugin system
   - Built-in file tree
+  - Tree-sitter integration (not in standard Vim)
 
 Philosophy: Core Vim editing with modern extensibility
+`
+
+const helpMacros = `MACRO RECORDING AND PLAYBACK
+
+Record complex sequences of commands and replay them.
+
+Recording:
+  q{a-z}      - Start recording to register {a-z}
+  (commands)  - Execute commands to record
+  q           - Stop recording
+
+Playback:
+  @{a-z}      - Play macro from register {a-z}
+  {count}@{a-z} - Play macro {count} times
+  @@          - Repeat last played macro (not yet)
+
+View Macros:
+  :macros     - List all recorded macros
+
+Examples:
+  qa          - Start recording to register 'a'
+  I# <Esc>j   - Add # to start of line, move down
+  q           - Stop recording
+  @a          - Replay macro
+  5@a         - Replay macro 5 times
+
+Tips:
+  - Use relative motions (j/k) not absolute (gg/G)
+  - Test macro once before replaying many times
+  - Macros work across all buffers
+  - Cannot nest macros (no recursive playback)
 `
 
 const helpCompletion = `COMPLETION SYSTEM

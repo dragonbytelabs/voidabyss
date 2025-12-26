@@ -27,6 +27,7 @@ func newTestEditor(t *testing.T, txt string) *Editor {
 	}
 	e.regs.named = make(map[rune]Register)
 	e.marks = make(map[rune]Mark)
+	e.macros = make(map[rune]Macro)
 	e.jumpList = make([]JumpListEntry, 0, 100)
 	e.jumpListIndex = -1
 	return e
