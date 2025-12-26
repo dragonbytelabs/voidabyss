@@ -190,16 +190,6 @@ func (e *Editor) prevSplit() {
 	e.statusMsg = fmt.Sprintf("split %d/%d", e.currentSplit+1, len(e.splits))
 }
 
-// syncEditorToSplit saves current editor state to current split
-func (e *Editor) syncEditorToSplit() {
-	if len(e.splits) == 0 || e.currentSplit < 0 || e.currentSplit >= len(e.splits) {
-		return
-	}
-
-	split := e.splits[e.currentSplit]
-	split.bufferIndex = e.currentBuffer
-}
-
 // syncSplitToEditor loads split's buffer into editor
 func (e *Editor) syncSplitToEditor() {
 	if len(e.splits) == 0 || e.currentSplit < 0 || e.currentSplit >= len(e.splits) {

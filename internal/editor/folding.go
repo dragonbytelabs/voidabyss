@@ -227,47 +227,6 @@ func (e *Editor) isLineFolded(line int) bool {
 	return false
 }
 
-// getVisibleLine converts a visual line number to actual line number
-// accounting for folds
-func (e *Editor) getVisibleLine(visualLine int) int {
-	if e.foldRanges == nil || len(e.foldRanges) == 0 {
-		return visualLine
-	}
-
-	actualLine := 0
-	visibleCount := 0
-
-	totalLines := e.lineCount()
-	for actualLine < totalLines {
-		if !e.isLineFolded(actualLine) {
-			if visibleCount == visualLine {
-				return actualLine
-			}
-			visibleCount++
-		}
-		actualLine++
-	}
-
-	return actualLine
-}
-
-// getVisibleLineCount returns the number of visible lines (excluding folded)
-func (e *Editor) getVisibleLineCount() int {
-	if e.foldRanges == nil || len(e.foldRanges) == 0 {
-		return e.lineCount()
-	}
-
-	count := 0
-	totalLines := e.lineCount()
-	for line := 0; line < totalLines; line++ {
-		if !e.isLineFolded(line) {
-			count++
-		}
-	}
-
-	return count
-}
-
 // getFoldIndicator returns a string indicating fold state for a line
 func (e *Editor) getFoldIndicator(line int) string {
 	if e.foldRanges == nil {

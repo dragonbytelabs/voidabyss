@@ -30,21 +30,23 @@ func (e *Editor) unindentLines(startLine, endLine int) {
 		toRemove := 0
 		spacesFound := 0
 
+	lineLoop:
 		for i, ch := range lineText {
-			if ch == '\t' {
+			switch ch {
+			case '\t':
 				// Tab counts as full indent
 				toRemove = i + 1
-				break
-			} else if ch == ' ' {
+				break lineLoop
+			case ' ':
 				spacesFound++
 				if spacesFound >= e.indentWidth {
 					toRemove = i + 1
-					break
+					break lineLoop
 				}
-			} else {
+			default:
 				// Non-whitespace, remove what we found
 				toRemove = i
-				break
+				break lineLoop
 			}
 		}
 
@@ -67,14 +69,16 @@ func (e *Editor) autoIndentLines(startLine, endLine int) {
 		lineText := e.getLine(line)
 		currentIndent := 0
 		firstNonSpace := 0
+	indentLoop:
 		for i, ch := range lineText {
-			if ch == ' ' {
+			switch ch {
+			case ' ':
 				currentIndent++
-			} else if ch == '\t' {
+			case '\t':
 				currentIndent += e.indentWidth
-			} else {
+			default:
 				firstNonSpace = i
-				break
+				break indentLoop
 			}
 		}
 

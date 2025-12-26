@@ -239,9 +239,10 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 	if e.awaitingMarkJump != 0 {
 		jumpType := e.awaitingMarkJump
 		e.awaitingMarkJump = 0
-		if jumpType == '\'' {
+		switch jumpType {
+		case '\'':
 			e.jumpToMarkLine(r)
-		} else if jumpType == '`' {
+		case '`':
 			e.jumpToMarkExact(r)
 		}
 		return
@@ -297,16 +298,17 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.pendingOp = 0
 		e.pendingOpCount = 0
 
-		// Word text objects
-		if r == 'w' || r == 'W' {
+		// Text objects
+		switch r {
+		case 'w', 'W':
 			e.applyOperatorTextObject(op, prefix, r, cnt)
-		} else if r == 'p' {
+		case 'p':
 			// Paragraph text object
 			e.applyOperatorTextObject(op, prefix, r, cnt)
-		} else if r == '"' || r == '(' || r == ')' || r == '{' || r == '}' || r == '[' || r == ']' {
+		case '"', '(', ')', '{', '}', '[', ']':
 			// Paired delimiter text objects
 			e.applyOperatorTextObject(op, prefix, r, cnt)
-		} else {
+		default:
 			e.statusMsg = "unsupported text object"
 		}
 		return

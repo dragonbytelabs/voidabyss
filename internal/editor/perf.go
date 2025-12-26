@@ -54,67 +54,6 @@ func ResetPerformanceStats() {
 	}
 }
 
-// trackLineStarts measures time spent in lineStarts()
-func (e *Editor) trackLineStarts(fn func() []int) []int {
-	if !perfEnabled || globalPerfStats == nil {
-		return fn()
-	}
-
-	start := time.Now()
-	result := fn()
-	elapsed := time.Since(start)
-
-	globalPerfStats.LineStartsCalls++
-	globalPerfStats.LineStartsTotalTime += elapsed
-
-	return result
-}
-
-// trackRender measures time spent in draw()
-func (e *Editor) trackRender(fn func()) {
-	if !perfEnabled || globalPerfStats == nil {
-		fn()
-		return
-	}
-
-	start := time.Now()
-	fn()
-	elapsed := time.Since(start)
-
-	globalPerfStats.RenderCalls++
-	globalPerfStats.RenderTotalTime += elapsed
-}
-
-// trackSearch measures time spent in search operations
-func (e *Editor) trackSearch(fn func()) {
-	if !perfEnabled || globalPerfStats == nil {
-		fn()
-		return
-	}
-
-	start := time.Now()
-	fn()
-	elapsed := time.Since(start)
-
-	globalPerfStats.SearchCalls++
-	globalPerfStats.SearchTotalTime += elapsed
-}
-
-// trackBufferOp measures time spent in buffer operations
-func (e *Editor) trackBufferOp(fn func()) {
-	if !perfEnabled || globalPerfStats == nil {
-		fn()
-		return
-	}
-
-	start := time.Now()
-	fn()
-	elapsed := time.Since(start)
-
-	globalPerfStats.BufferOpCalls++
-	globalPerfStats.BufferOpTotalTime += elapsed
-}
-
 // GetAverageLineStartsTime returns average time per lineStarts() call
 func (s *PerformanceStats) GetAverageLineStartsTime() time.Duration {
 	if s.LineStartsCalls == 0 {

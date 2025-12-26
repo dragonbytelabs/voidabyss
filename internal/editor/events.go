@@ -220,24 +220,3 @@ func (e *Editor) FireSearchComplete(query string, matchCount int) {
 		"matches": matchCount,
 	})
 }
-
-// setModeWithEvent sets the mode and fires ModeChanged event
-func (e *Editor) setModeWithEvent(newMode Mode) {
-	if e.mode == newMode {
-		return
-	}
-
-	oldMode := e.mode
-	e.mode = newMode
-
-	// Fire mode-specific events
-	if oldMode == ModeInsert {
-		e.FireInsertLeave()
-	}
-	if newMode == ModeInsert {
-		e.FireInsertEnter()
-	}
-
-	// Fire generic mode changed event
-	e.FireModeChanged(oldMode, newMode)
-}
