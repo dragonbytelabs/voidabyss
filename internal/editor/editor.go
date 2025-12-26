@@ -154,6 +154,11 @@ type Editor struct {
 	searchBuf     []rune // input buffer while typing search
 	searchMatches []int  // positions of matches in viewport (for highlighting)
 
+	// character find (f/F/t/T)
+	lastCharFind     rune // character to find
+	lastCharFindKind rune // 'f', 'F', 't', or 'T'
+	awaitingCharFind rune // waiting for character after f/F/t/T
+
 	// completion
 	completionActive     bool     // true when cycling through completions
 	completionCandidates []string // all word candidates

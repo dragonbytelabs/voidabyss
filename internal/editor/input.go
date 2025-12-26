@@ -204,6 +204,32 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		return
 	}
 
+	// character find (f/F/t/T)
+	if e.awaitingCharFind != 0 {
+		findKind := e.awaitingCharFind
+		e.awaitingCharFind = 0
+		count := e.consumeCountOr1()
+
+		var newPos int
+		tillBefore := findKind == 't' || findKind == 'T'
+		forward := findKind == 'f' || findKind == 't'
+
+		if forward {
+			newPos = e.findCharForward(r, tillBefore, count)
+		} else {
+			newPos = e.findCharBackward(r, tillBefore, count)
+		}
+
+		if newPos != -1 {
+			e.cx = newPos
+			e.wantX = e.cx
+			// Remember for ; and ,
+			e.lastCharFind = r
+			e.lastCharFindKind = findKind
+		}
+		return
+	}
+
 	// register selection
 	if e.awaitingRegister {
 		if isRegisterName(r) {
@@ -273,12 +299,7 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 
 		// special case: gg as motion within operator (e.g., dgg)
 		if op == 'g' && r == 'g' {
-			// standalone gg: go to top
-			// Add to jump list before big jump
-			e.addToJumpList(e.cy, e.cx)
-			e.cy = 0
-			e.cx = 0
-			e.wantX = 0
+			e.moveToFirstLine()
 			return
 		}
 
@@ -418,29 +439,72 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 	case 'N':
 		e.searchNext(!e.searchForward, true)
 
+	case 'f', 'F', 't', 'T':
+		e.awaitingCharFind = r
+	case ';':
+		// Repeat last f/F/t/T
+		if e.lastCharFindKind != 0 {
+			count := e.consumeCountOr1()
+			var newPos int
+			tillBefore := e.lastCharFindKind == 't' || e.lastCharFindKind == 'T'
+			forward := e.lastCharFindKind == 'f' || e.lastCharFindKind == 't'
+
+			if forward {
+				newPos = e.findCharForward(e.lastCharFind, tillBefore, count)
+			} else {
+				newPos = e.findCharBackward(e.lastCharFind, tillBefore, count)
+			}
+
+			if newPos != -1 {
+				e.cx = newPos
+				e.wantX = e.cx
+			}
+		}
+	case ',':
+		// Repeat last f/F/t/T in opposite direction
+		if e.lastCharFindKind != 0 {
+			count := e.consumeCountOr1()
+			var newPos int
+			tillBefore := e.lastCharFindKind == 't' || e.lastCharFindKind == 'T'
+			forward := e.lastCharFindKind == 'f' || e.lastCharFindKind == 't'
+
+			// Reverse direction
+			if !forward {
+				newPos = e.findCharForward(e.lastCharFind, tillBefore, count)
+			} else {
+				newPos = e.findCharBackward(e.lastCharFind, tillBefore, count)
+			}
+
+			if newPos != -1 {
+				e.cx = newPos
+				e.wantX = e.cx
+			}
+		}
+
+	case '%':
+		e.moveToMatchingBracket()
+
+	case '0':
+		// handled above in digit check, but add explicit case for clarity
+		if e.pendingCount == 0 && e.pendingOp == 0 {
+			e.moveToLineZero()
+		}
+
 	case '$':
 		e.cx = e.lineLen(e.cy)
 		e.wantX = e.cx
 
 	case '^':
-		// first non-blank character
-		line := e.getLine(e.cy)
-		pos := 0
-		for i, ch := range []rune(line) {
-			if ch != ' ' && ch != '\t' {
-				pos = i
-				break
-			}
-		}
-		e.cx = pos
-		e.wantX = e.cx
+		e.moveToLineStart()
 
 	case 'G':
-		// Add to jump list before big jump
-		e.addToJumpList(e.cy, e.cx)
-		e.cy = e.lineCount() - 1
-		e.cx = 0
-		e.wantX = 0
+		count := e.pendingCount
+		e.pendingCount = 0
+		if count > 0 {
+			e.moveToLine(count)
+		} else {
+			e.moveToLastLine()
+		}
 
 	case 'm':
 		// Set mark - wait for next character
@@ -636,15 +700,29 @@ func (e *Editor) handleSearch(k *tcell.EventKey) bool {
 		if query != "" {
 			e.searchQuery = query
 			e.searchNext(e.searchForward, false)
+		} else {
+			// Clear search if empty
+			e.searchQuery = ""
+			e.searchMatches = nil
 		}
+		return false
+	case tcell.KeyEscape:
+		// Cancel search
+		e.searchBuf = nil
+		e.mode = ModeNormal
+		e.statusMsg = ""
 		return false
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if len(e.searchBuf) > 0 {
 			e.searchBuf = e.searchBuf[:len(e.searchBuf)-1]
+			// Incremental search - update as we type
+			e.performIncrementalSearch()
 		}
 		return false
 	case tcell.KeyRune:
 		e.searchBuf = append(e.searchBuf, k.Rune())
+		// Incremental search - update as we type
+		e.performIncrementalSearch()
 		return false
 	}
 	return false
