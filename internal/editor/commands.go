@@ -47,6 +47,18 @@ func (e *Editor) exec(cmd string) bool {
 		e.deleteBufferForce()
 	case "ls", "buffers":
 		e.listBuffers()
+	case "vsplit", "vs":
+		e.vsplit()
+	case "split", "sp":
+		e.split()
+	case "close":
+		e.closeSplit()
+	case "only":
+		// Close all splits except current
+		e.splits = []*Split{e.splits[e.currentSplit]}
+		e.currentSplit = 0
+		e.redistributeSplitSpace()
+		e.statusMsg = "closed all other splits"
 	case "Explore", "Ex":
 		e.toggleFileTree()
 	case "reg", "registers":

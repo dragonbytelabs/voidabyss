@@ -9,8 +9,51 @@ import (
 )
 
 func (e *Editor) handleKey(k *tcell.EventKey) bool {
-	// Handle Ctrl+W to toggle focus between tree and buffer
-	if e.treeOpen && k.Key() == tcell.KeyCtrlW {
+	// Handle window commands (Ctrl+W prefix)
+	if e.awaitingWindow && k.Key() == tcell.KeyRune {
+		e.awaitingWindow = false
+		switch k.Rune() {
+		case 'w', 'W':
+			// Ctrl+W w - next split
+			e.nextSplit()
+		case 'h':
+			// Ctrl+W h - left split (for now, just prev)
+			e.prevSplit()
+		case 'l':
+			// Ctrl+W l - right split (for now, just next)
+			e.nextSplit()
+		case 'v':
+			// Ctrl+W v - vertical split
+			e.vsplit()
+		case 's':
+			// Ctrl+W s - horizontal split
+			e.split()
+		case 'c':
+			// Ctrl+W c - close split
+			e.closeSplit()
+		case 'o':
+			// Ctrl+W o - only (close all other splits)
+			if len(e.splits) > 1 {
+				e.splits = []*Split{e.splits[e.currentSplit]}
+				e.currentSplit = 0
+				e.redistributeSplitSpace()
+				e.statusMsg = "closed all other splits"
+			}
+		default:
+			e.statusMsg = fmt.Sprintf("unknown window command: Ctrl+W %c", k.Rune())
+		}
+		return false
+	}
+
+	// Handle Ctrl+W to enter window command mode (if no tree or tree closed)
+	if k.Key() == tcell.KeyCtrlW && (!e.treeOpen || len(e.splits) > 1) {
+		e.awaitingWindow = true
+		e.statusMsg = "-- WINDOW --"
+		return false
+	}
+
+	// Handle Ctrl+W to toggle focus between tree and buffer (legacy, when tree is open and single split)
+	if e.treeOpen && k.Key() == tcell.KeyCtrlW && len(e.splits) == 1 {
 		e.focusTree = !e.focusTree
 		if e.focusTree {
 			e.statusMsg = "focus: file tree"

@@ -191,6 +191,11 @@ type Editor struct {
 	treeOpen       bool
 	treePanelWidth int
 	focusTree      bool // true if tree has focus, false if buffer has focus
+
+	// splits
+	splits         []*Split // list of splits
+	currentSplit   int      // index of focused split
+	awaitingWindow bool     // waiting for window command after Ctrl+W
 }
 
 func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (*Editor, error) {
@@ -235,6 +240,9 @@ func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.syncFromBuffer()
+
+	// Initialize splits
+	ed.initSplits()
 
 	// Register editor as context for Lua buffer operations
 	ed.RegisterWithLoader()
@@ -282,6 +290,9 @@ func newEditorFromProject(path string, cfg *config.Config, loader *config.Loader
 	ed.marks = make(map[rune]Mark)
 	ed.jumpList = make([]JumpListEntry, 0, 100)
 	ed.jumpListIndex = -1
+
+	// Initialize splits
+	ed.initSplits()
 
 	// Register editor as context for Lua buffer operations
 	ed.RegisterWithLoader()
