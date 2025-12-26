@@ -29,7 +29,7 @@ func GetStatePath() string {
 	return filepath.Join(stateDir, "state.json")
 }
 
-// Load loads state from disk
+// Load loads state from disk with corruption recovery
 func (s *State) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -48,14 +48,27 @@ func (s *State) Load() error {
 		return err
 	}
 
+	// Try to unmarshal the data
 	if err := json.Unmarshal(data, &s.data); err != nil {
+		// Corruption detected - backup and reset
+		backupPath := s.path + ".corrupt"
+		if backupErr := os.WriteFile(backupPath, data, 0644); backupErr == nil {
+			// Successfully backed up, now reset
+			s.data = make(map[string]interface{})
+			// Save empty state
+			s.mu.Unlock()
+			saveErr := s.Save()
+			s.mu.Lock()
+			return saveErr
+		}
+		// Couldn't backup, return original error
 		return err
 	}
 
 	return nil
 }
 
-// Save saves state to disk
+// Save saves state to disk atomically
 func (s *State) Save() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -70,7 +83,19 @@ func (s *State) Save() error {
 		return err
 	}
 
-	return os.WriteFile(s.path, data, 0644)
+	// Atomic write: write to temp file then rename
+	tempFile := s.path + ".tmp"
+	if err := os.WriteFile(tempFile, data, 0644); err != nil {
+		return err
+	}
+
+	// Rename is atomic on POSIX systems
+	if err := os.Rename(tempFile, s.path); err != nil {
+		os.Remove(tempFile) // Clean up temp file on failure
+		return err
+	}
+
+	return nil
 }
 
 // Get retrieves a value from state
@@ -113,4 +138,26 @@ func (s *State) Keys() []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// GetPath returns the state file path
+func (s *State) GetPath() string {
+	return s.path
+}
+
+// TestWrite tests if the state file is writable
+func (s *State) TestWrite() error {
+	stateDir := filepath.Dir(s.path)
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		return err
+	}
+
+	// Try to create/write a test file
+	testFile := filepath.Join(stateDir, ".test")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		return err
+	}
+	os.Remove(testFile)
+
+	return nil
 }

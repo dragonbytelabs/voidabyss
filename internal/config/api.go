@@ -82,6 +82,7 @@ type Command struct {
 type EventOpts struct {
 	Pattern string
 	Once    bool
+	Group   string // Event group name for organized management
 }
 
 // EventHandler represents an event/autocmd handler
@@ -89,17 +90,29 @@ type EventHandler struct {
 	Event string
 	Fn    interface{} // Lua function reference
 	Opts  EventOpts
+	Fired bool // True if Once=true and already fired
 }
 
 // Features tracks available features for vb.has()
 var Features = map[string]bool{
-	"keymap.leader":       true,
-	"events.bufwritepost": true,
-	"completion.ctrl-n":   true,
-	"opt.tabwidth":        true,
-	"opt.expandtab":       true,
-	"opt.leader":          true,
-	"buffer.api":          true,
-	"state.persistent":    true,
-	"notify":              true,
-}
+	"keymap.leader":        true,
+	"keymap.function":      true,
+	"keymap.noremap":       true,
+	"keymap.precedence":    true,
+	"keymap.introspection": true,
+	"command.function":     true,
+	"events.autocmd":       true,
+	"events.pattern":       true,
+	"events.once":          true,
+	"events.groups":        true,
+	"events.augroup":       true,
+	"events.bufwritepost":  true,
+	"completion.ctrl-n":    true,
+	"opt.tabwidth":         true,
+	"opt.expandtab":        true,
+	"opt.leader":           true,
+	"opt.property_access":  true,
+	"buffer.api":           true,
+	"state.persistent":     true,
+	"notify":               true, "schedule": true,
+	"callback.safety": true}

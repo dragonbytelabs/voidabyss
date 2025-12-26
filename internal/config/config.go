@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
+
+	lua "github.com/yuin/gopher-lua"
 )
 
 // Config holds all editor configuration
@@ -15,6 +18,10 @@ type Config struct {
 	Plugins       []string
 	PluginDir     string
 	State         *State
+
+	// Scheduled functions (for vb.schedule)
+	scheduledFns []*lua.LFunction
+	scheduleMu   sync.Mutex
 
 	// Legacy fields for backwards compatibility
 	TabWidth         int
@@ -129,6 +136,25 @@ vb.keymap("i", "jj", "<Esc>", { desc = "exit insert mode" })
 
 -- Commands
 -- vb.command("W", ":w<CR>", { desc = "write file" })
+vb.command("Checkhealth", function() vb.checkhealth() end, { desc = "check editor health" })
+vb.command("Keymap", function(args)
+	local mode = args[1]
+	local lhs = args[2]
+	local maps = vb.keymap.list(mode, lhs)
+	
+	if #maps == 0 then
+		vb.notify("No keymaps found", "info")
+		return
+	end
+	
+	print("\n=== Keymaps ===")
+	for _, map in ipairs(maps) do
+		local noremap = map.noremap and "[noremap]" or "[remap]"
+		local desc = map.desc ~= "" and " - " .. map.desc or ""
+		print(string.format("  [%s] %s -> %s %s%s", map.mode, map.lhs, map.rhs, noremap, desc))
+	end
+	print("")
+end, { desc = "list keymaps" })
 
 -- Events
 vb.on("EditorReady", function(ctx)

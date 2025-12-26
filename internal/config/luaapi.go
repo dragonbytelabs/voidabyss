@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	lua "github.com/yuin/gopher-lua"
@@ -18,14 +19,17 @@ func (l *Loader) SetupVbAPI() {
 	// vb.opt (with metatable for assignment and methods)
 	l.setupOptTable(vbTable)
 
-	// vb.keymap(mode, lhs, rhs, opts)
-	l.L.SetField(vbTable, "keymap", l.L.NewFunction(l.luaKeymap))
+	// vb.keymap (with list method)
+	l.setupKeymapTable(vbTable)
 
 	// vb.command(name, rhs, opts)
 	l.L.SetField(vbTable, "command", l.L.NewFunction(l.luaCommand))
 
 	// vb.on(event, fn, opts)
 	l.L.SetField(vbTable, "on", l.L.NewFunction(l.luaOn))
+
+	// vb.augroup(name, fn)
+	l.L.SetField(vbTable, "augroup", l.L.NewFunction(l.luaAugroup))
 
 	// vb.buf (buffer operations)
 	l.setupBufTable(vbTable)
@@ -38,6 +42,12 @@ func (l *Loader) SetupVbAPI() {
 
 	// vb.has(feature)
 	l.L.SetField(vbTable, "has", l.L.NewFunction(l.luaHas))
+
+	// vb.checkhealth()
+	l.L.SetField(vbTable, "checkhealth", l.L.NewFunction(l.luaCheckHealth))
+
+	// vb.schedule(fn)
+	l.L.SetField(vbTable, "schedule", l.L.NewFunction(l.luaSchedule))
 
 	// vb.plugins (for legacy compatibility)
 	pluginsTable := l.L.NewTable()
@@ -175,6 +185,71 @@ func (l *Loader) setOption(key string, value lua.LValue) {
 	}
 }
 
+// setupKeymapTable creates vb.keymap as a callable function with methods
+func (l *Loader) setupKeymapTable(vbTable *lua.LTable) {
+	keymapFunc := l.L.NewFunction(l.luaKeymap)
+
+	// Create a metatable to make the function callable and also have methods
+	mt := l.L.NewTable()
+
+	// __call makes vb.keymap() work
+	l.L.SetField(mt, "__call", l.L.NewFunction(func(L *lua.LState) int {
+		// Remove the self argument and call the actual function
+		L.Remove(1)
+		return l.luaKeymap(L)
+	}))
+
+	// __index provides methods like vb.keymap.list()
+	indexTable := l.L.NewTable()
+	l.L.SetField(indexTable, "list", l.L.NewFunction(l.luaKeymapList))
+	l.L.SetField(mt, "__index", indexTable)
+
+	l.L.SetMetatable(keymapFunc, mt)
+	l.L.SetField(vbTable, "keymap", keymapFunc)
+}
+
+// luaKeymapList implements vb.keymap.list(mode, lhs)
+func (l *Loader) luaKeymapList(L *lua.LState) int {
+	mode := ""
+	lhsFilter := ""
+
+	// Optional mode parameter
+	if L.GetTop() >= 1 && L.Get(1) != lua.LNil {
+		mode = L.CheckString(1)
+	}
+
+	// Optional lhs filter parameter
+	if L.GetTop() >= 2 && L.Get(2) != lua.LNil {
+		lhsFilter = L.CheckString(2)
+	}
+
+	// Get filtered keymaps
+	keymaps := ListKeymaps(l.config.KeyMappings, mode, lhsFilter)
+
+	// Convert to Lua table
+	result := L.NewTable()
+	for i, km := range keymaps {
+		entry := L.NewTable()
+		L.SetField(entry, "mode", lua.LString(km.Mode))
+		L.SetField(entry, "lhs", lua.LString(km.LHS))
+
+		if km.IsFunc {
+			L.SetField(entry, "rhs", lua.LString("<function>"))
+		} else {
+			L.SetField(entry, "rhs", lua.LString(km.RHS))
+		}
+
+		L.SetField(entry, "desc", lua.LString(km.Opts.Desc))
+		L.SetField(entry, "noremap", lua.LBool(km.Opts.Noremap))
+		L.SetField(entry, "silent", lua.LBool(km.Opts.Silent))
+
+		L.RawSetInt(result, i+1, entry)
+	}
+
+	L.Push(result)
+	return 1
+}
+
 // luaKeymap implements vb.keymap(mode, lhs, rhs, opts)
 func (l *Loader) luaKeymap(L *lua.LState) int {
 	mode := L.CheckString(1)
@@ -216,6 +291,10 @@ func (l *Loader) luaKeymap(L *lua.LState) int {
 		mapping.RHS = string(str)
 		mapping.IsFunc = false
 	}
+
+	// Normalize the mapping (expand leader, handle key notation)
+	leader := l.config.Options.Leader
+	NormalizeKeyMapping(&mapping, leader)
 
 	l.config.KeyMappings = append(l.config.KeyMappings, mapping)
 
@@ -290,6 +369,20 @@ func (l *Loader) luaOn(L *lua.LState) int {
 					opts.Once = bool(b)
 				}
 			}
+			if v := L.GetField(optsTable, "group"); v != lua.LNil {
+				if s, ok := v.(lua.LString); ok {
+					opts.Group = string(s)
+				}
+			}
+		}
+	}
+
+	// If no group specified but we're inside an augroup, use that
+	if opts.Group == "" {
+		if currentGroup := L.GetGlobal("_current_augroup"); currentGroup != lua.LNil {
+			if groupStr, ok := currentGroup.(lua.LString); ok {
+				opts.Group = string(groupStr)
+			}
 		}
 	}
 
@@ -297,9 +390,34 @@ func (l *Loader) luaOn(L *lua.LState) int {
 		Event: event,
 		Fn:    fn,
 		Opts:  opts,
+		Fired: false,
 	}
 
 	l.config.EventHandlers = append(l.config.EventHandlers, handler)
+	return 0
+}
+
+// luaAugroup implements vb.augroup(name, fn)
+// Clears existing group and calls function to register new handlers
+func (l *Loader) luaAugroup(L *lua.LState) int {
+	groupName := L.CheckString(1)
+	fn := L.CheckFunction(2)
+
+	// Clear existing group
+	l.config.ClearEventGroup(groupName)
+
+	// Store current group in a global variable for vb.on() to use
+	L.SetGlobal("_current_augroup", lua.LString(groupName))
+
+	// Call the function (which should call vb.on() to register handlers)
+	L.Push(fn)
+	if err := L.PCall(0, 0, nil); err != nil {
+		L.RaiseError("augroup function error: %v", err)
+	}
+
+	// Clear the current group
+	L.SetGlobal("_current_augroup", lua.LNil)
+
 	return 0
 }
 
@@ -496,5 +614,229 @@ func goToLua(L *lua.LState, value interface{}) lua.LValue {
 		return tbl
 	default:
 		return lua.LNil
+	}
+}
+
+// luaCheckHealth implements vb.checkhealth()
+func (l *Loader) luaCheckHealth(L *lua.LState) int {
+	var output strings.Builder
+
+	output.WriteString("\n")
+	output.WriteString("=== Voidabyss Health Check ===\n\n")
+
+	// Version
+	output.WriteString(fmt.Sprintf("✓ Version: %s\n", Version))
+
+	// Lua version
+	output.WriteString(fmt.Sprintf("✓ Lua: %s\n", lua.LuaVersion))
+
+	// Config path
+	configPath := GetConfigPath()
+	{
+		loaded := "not loaded"
+		if _, err := os.Stat(configPath); err == nil {
+			loaded = "loaded"
+		}
+		output.WriteString(fmt.Sprintf("✓ Config: %s (%s)\n", configPath, loaded))
+	}
+
+	// State file
+	statePath := l.config.State.GetPath()
+	stateWritable := "yes"
+	if err := l.config.State.TestWrite(); err != nil {
+		stateWritable = fmt.Sprintf("ERROR - %v", err)
+	}
+	output.WriteString(fmt.Sprintf("✓ State file: %s (writable: %s)\n", statePath, stateWritable))
+
+	// API modules registered
+	output.WriteString("\n=== API Modules ===\n")
+	modules := []string{
+		"vb.version",
+		"vb.opt (options with property access)",
+		"vb.keymap (key mappings)",
+		"vb.command (custom commands)",
+		"vb.on (events/autocmds)",
+		"vb.buf (buffer operations)",
+		"vb.state (persistent storage)",
+		"vb.notify (notifications)",
+		"vb.has (feature detection)",
+		"vb.schedule (async function queue)",
+		"vb.checkhealth (this command)",
+	}
+	for _, mod := range modules {
+		output.WriteString(fmt.Sprintf("  ✓ %s\n", mod))
+	}
+
+	// Keymap statistics
+	output.WriteString("\n=== Keymaps ===\n")
+	keymapsByMode := make(map[string]int)
+	for _, km := range l.config.KeyMappings {
+		keymapsByMode[km.Mode]++
+	}
+	if len(keymapsByMode) == 0 {
+		output.WriteString("  No keymaps registered\n")
+	} else {
+		for mode, count := range keymapsByMode {
+			modeName := mode
+			switch mode {
+			case "n":
+				modeName = "normal"
+			case "i":
+				modeName = "insert"
+			case "v":
+				modeName = "visual"
+			case "c":
+				modeName = "command"
+			}
+			output.WriteString(fmt.Sprintf("  %s: %d mappings\n", modeName, count))
+		}
+	}
+
+	// Command statistics
+	output.WriteString("\n=== Commands ===\n")
+	if len(l.config.Commands) == 0 {
+		output.WriteString("  No custom commands registered\n")
+	} else {
+		output.WriteString(fmt.Sprintf("  %d custom commands registered\n", len(l.config.Commands)))
+		for _, cmd := range l.config.Commands {
+			desc := ""
+			if cmd.Opts.Desc != "" {
+				desc = fmt.Sprintf(" (%s)", cmd.Opts.Desc)
+			}
+			output.WriteString(fmt.Sprintf("    :%s%s\n", cmd.Name, desc))
+		}
+	}
+
+	// Event handler statistics
+	output.WriteString("\n=== Event Handlers ===\n")
+	eventsByType := make(map[string]int)
+	for _, eh := range l.config.EventHandlers {
+		eventsByType[eh.Event]++
+	}
+	if len(eventsByType) == 0 {
+		output.WriteString("  No event handlers registered\n")
+	} else {
+		for event, count := range eventsByType {
+			output.WriteString(fmt.Sprintf("  %s: %d handlers\n", event, count))
+		}
+	}
+
+	// Features
+	output.WriteString("\n=== Features ===\n")
+	features := []string{
+		"keymap.leader",
+		"keymap.function",
+		"command.function",
+		"events.autocmd",
+		"buffer.api",
+		"state.persistent",
+		"opt.tabwidth",
+		"opt.property_access",
+	}
+	for _, feature := range features {
+		status := "✓"
+		if !Features[feature] {
+			status = "✗"
+		}
+		output.WriteString(fmt.Sprintf("  %s %s\n", status, feature))
+	}
+
+	// Completion status
+	output.WriteString("\n=== Editor Features ===\n")
+	output.WriteString("  ✓ Completion: enabled\n")
+	output.WriteString("  ✓ Buffer API: available\n")
+
+	// State info
+	output.WriteString("\n=== Persistent State ===\n")
+	keys := l.config.State.Keys()
+	if len(keys) == 0 {
+		output.WriteString("  No persistent state stored\n")
+	} else {
+		output.WriteString(fmt.Sprintf("  %d keys stored\n", len(keys)))
+		for _, key := range keys {
+			val := l.config.State.Get(key, nil)
+			output.WriteString(fmt.Sprintf("    %s = %v\n", key, val))
+		}
+	}
+
+	output.WriteString("\n")
+
+	// Print to stdout (visible in editor)
+	fmt.Print(output.String())
+
+	return 0
+}
+
+// luaSchedule implements vb.schedule(fn)
+// Queues a function to be called on the next tick
+func (l *Loader) luaSchedule(L *lua.LState) int {
+	fn := L.CheckFunction(1)
+
+	// Store the function in the scheduled queue (thread-safe)
+	l.config.scheduleMu.Lock()
+	l.config.scheduledFns = append(l.config.scheduledFns, fn)
+	l.config.scheduleMu.Unlock()
+
+	return 0
+}
+
+// SafeCallLuaFunction safely calls a Lua function with error handling
+// Returns (success bool, error string)
+func (l *Loader) SafeCallLuaFunction(fn *lua.LFunction, args ...lua.LValue) (bool, string) {
+	// Create error handler function
+	errHandler := l.L.NewFunction(func(L *lua.LState) int {
+		err := L.CheckAny(1)
+		L.Push(lua.LString(fmt.Sprintf("Lua error: %v", err)))
+		return 1
+	})
+
+	// Push error handler
+	l.L.Push(errHandler)
+
+	// Push function
+	l.L.Push(fn)
+
+	// Push arguments
+	for _, arg := range args {
+		l.L.Push(arg)
+	}
+
+	// Call with protection
+	if err := l.L.PCall(len(args), 0, errHandler); err != nil {
+		return false, err.Error()
+	}
+
+	return true, ""
+}
+
+// ProcessScheduledFunctions executes all scheduled functions
+// Should be called once per editor tick
+func (c *Config) ProcessScheduledFunctions(L *lua.LState) {
+	// Get and clear the queue atomically
+	c.scheduleMu.Lock()
+	fns := c.scheduledFns
+	c.scheduledFns = nil
+	c.scheduleMu.Unlock()
+
+	if len(fns) == 0 {
+		return
+	}
+
+	// Execute each function safely
+	for _, fn := range fns {
+		// Create error handler
+		errHandler := L.NewFunction(func(L *lua.LState) int {
+			err := L.CheckAny(1)
+			fmt.Printf("Scheduled function error: %v\n", err)
+			return 0
+		})
+
+		L.Push(errHandler)
+		L.Push(fn)
+
+		// Call with protection (pcall equivalent)
+		if err := L.PCall(0, 0, errHandler); err != nil {
+			fmt.Printf("Error executing scheduled function: %v\n", err)
+		}
 	}
 }

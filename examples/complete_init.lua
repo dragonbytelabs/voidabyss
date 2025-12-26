@@ -65,6 +65,11 @@ end, { desc = "cancel completion" })
 vb.command("W", ":w<CR>", { desc = "write file (uppercase)" })
 vb.command("Q", ":q<CR>", { desc = "quit (uppercase)" })
 
+-- Health check command - run :Checkhealth to see editor status
+vb.command("Checkhealth", function(args, ctx)
+	vb.checkhealth()
+end, { desc = "check editor health and configuration" })
+
 -- Command with function callback
 vb.command("Echo", function(args, ctx)
 	local msg = args[1] or "Hello!"
@@ -193,6 +198,33 @@ end
 
 -- You can call custom functions from keymaps
 vb.keymap("n", "<leader>s", function(ctx)
+	print_stats()
+end, { desc = "show stats" })
+
+-- ============================================================================
+-- ASYNC / SCHEDULING (vb.schedule)
+-- ============================================================================
+
+-- vb.schedule() queues a function to run on the next tick
+-- This is useful for deferring work or avoiding blocking the current operation
+
+vb.on("EditorReady", function(ctx)
+	-- Do some immediate work
+	vb.notify("Starting initialization...", "info")
+	
+	-- Schedule heavy work for next tick
+	vb.schedule(function()
+		-- This runs after current event handler completes
+		vb.notify("Initialization complete!", "info")
+	end)
+end)
+
+-- Error handling: scheduled functions are protected
+vb.schedule(function()
+	-- Even if this errors, other scheduled functions will still run
+	-- error("This won't crash the editor")
+	vb.notify("Safe async execution", "info")
+end)
 	print_stats()
 end, { desc = "show stats" })
 
