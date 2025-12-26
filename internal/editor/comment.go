@@ -13,6 +13,11 @@ func (e *Editor) toggleLineComment(lineNum int) {
 	line := e.getLine(lineNum)
 	commentPrefix := e.getCommentPrefix()
 
+	// No comment prefix available for this filetype
+	if commentPrefix == "" {
+		return
+	}
+
 	// Trim the comment prefix if present
 	trimmed := strings.TrimSpace(line)
 
@@ -30,8 +35,12 @@ func (e *Editor) toggleLineComment(lineNum int) {
 			}
 			newLine := line[:idx] + line[afterComment:]
 
-			e.buffer.Delete(lineStart, lineEnd)
-			e.buffer.Insert(lineStart, newLine)
+			if err := e.buffer.Delete(lineStart, lineEnd); err != nil {
+				return
+			}
+			if err := e.buffer.Insert(lineStart, newLine); err != nil {
+				return
+			}
 		}
 	} else {
 		// Comment: add comment prefix
@@ -47,8 +56,12 @@ func (e *Editor) toggleLineComment(lineNum int) {
 		// Insert comment at first non-whitespace position
 		newLine := line[:leadingSpace] + commentPrefix + " " + line[leadingSpace:]
 
-		e.buffer.Delete(lineStart, lineEnd)
-		e.buffer.Insert(lineStart, newLine)
+		if err := e.buffer.Delete(lineStart, lineEnd); err != nil {
+			return
+		}
+		if err := e.buffer.Insert(lineStart, newLine); err != nil {
+			return
+		}
 	}
 
 	e.dirty = true

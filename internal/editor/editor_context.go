@@ -12,10 +12,14 @@ func (e *Editor) SetText(text string) {
 	// Replace entire buffer content
 	oldLen := e.buffer.Len()
 	if oldLen > 0 {
-		e.buffer.Delete(0, oldLen)
+		if err := e.buffer.Delete(0, oldLen); err != nil {
+			return
+		}
 	}
 	if len(text) > 0 {
-		e.buffer.Insert(0, text)
+		if err := e.buffer.Insert(0, text); err != nil {
+			return
+		}
 	}
 	e.dirty = true
 	e.ensureCursorValid()
@@ -69,12 +73,16 @@ func (e *Editor) SetLine(y int, text string) {
 
 	// Delete old line content
 	if end > start {
-		e.buffer.Delete(start, end)
+		if err := e.buffer.Delete(start, end); err != nil {
+			return
+		}
 	}
 
 	// Insert new content
 	if len(text) > 0 {
-		e.buffer.Insert(start, text)
+		if err := e.buffer.Insert(start, text); err != nil {
+			return
+		}
 	}
 
 	e.dirty = true
@@ -83,7 +91,13 @@ func (e *Editor) SetLine(y int, text string) {
 
 // Insert inserts text at the given rune position
 func (e *Editor) Insert(pos int, text string) {
-	e.buffer.Insert(pos, text)
+	if pos < 0 || pos > e.buffer.Len() {
+		return
+	}
+	if err := e.buffer.Insert(pos, text); err != nil {
+		// Log error but don't crash
+		return
+	}
 	e.dirty = true
 	e.ensureCursorValid()
 }
@@ -93,7 +107,10 @@ func (e *Editor) Delete(start, end int) {
 	if start < 0 || end < start || end > e.buffer.Len() {
 		return
 	}
-	e.buffer.Delete(start, end)
+	if err := e.buffer.Delete(start, end); err != nil {
+		// Log error but don't crash
+		return
+	}
 	e.dirty = true
 	e.ensureCursorValid()
 }

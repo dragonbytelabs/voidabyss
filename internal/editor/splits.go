@@ -111,12 +111,23 @@ func (e *Editor) closeSplit() {
 		return
 	}
 
+	// Validate currentSplit index
+	if e.currentSplit < 0 || e.currentSplit >= len(e.splits) {
+		e.currentSplit = 0
+		return
+	}
+
 	// Remove current split
 	e.splits = append(e.splits[:e.currentSplit], e.splits[e.currentSplit+1:]...)
 
 	// Adjust focus
 	if e.currentSplit >= len(e.splits) {
 		e.currentSplit = len(e.splits) - 1
+	}
+
+	// Ensure currentSplit is valid
+	if e.currentSplit < 0 {
+		e.currentSplit = 0
 	}
 
 	// TODO: Redistribute space among remaining splits
@@ -227,6 +238,9 @@ func (e *Editor) saveCurrentBufferState() {
 
 // loadBufferState loads state from a buffer view into the editor
 func (e *Editor) loadBufferState(bv *BufferView) {
+	if bv == nil {
+		return
+	}
 	e.buffer = bv.buffer
 	e.filename = bv.filename
 	e.dirty = bv.dirty
