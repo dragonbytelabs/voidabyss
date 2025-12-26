@@ -108,13 +108,3 @@ func (e *Editor) autoIndentLines(startLine, endLine int) {
 		}
 	}
 }
-
-// indentCurrentLine indents the current line
-func (e *Editor) indentCurrentLine() {
-	e.indentLines(e.cy, e.cy)
-}
-
-// unindentCurrentLine unindents the current line
-func (e *Editor) unindentCurrentLine() {
-	e.unindentLines(e.cy, e.cy)
-}

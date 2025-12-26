@@ -13,6 +13,16 @@ func (e *Editor) exec(cmd string) bool {
 		return false
 	}
 
+	// Handle :help [topic]
+	if cmd == "help" || (len(cmd) > 5 && cmd[0:5] == "help ") {
+		topic := ""
+		if len(cmd) > 5 {
+			topic = cmd[5:]
+		}
+		e.showHelp(topic)
+		return false
+	}
+
 	switch cmd {
 	case "q":
 		if e.dirty {

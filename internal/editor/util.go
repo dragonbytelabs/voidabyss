@@ -148,35 +148,3 @@ func isWordCharBig(r rune) bool {
 	// Vim "WORD": any run of non-whitespace
 	return !isSpace(r)
 }
-
-func (e *Editor) toNextWordStart(pos int, count int) int {
-	if count <= 0 {
-		count = 1
-	}
-	r := e.textRunes()
-	n := len(r)
-	if pos < 0 {
-		pos = 0
-	}
-	if pos >= n {
-		return pos
-	}
-
-	i := pos
-
-	for c := 0; c < count; c++ {
-		// If on a word char, consume the rest of this word
-		if i < n && isWordChar(r[i]) {
-			for i < n && isWordChar(r[i]) {
-				i++
-			}
-		}
-
-		// Consume following non-word chars (spaces/punct) up to next word start
-		for i < n && !isWordChar(r[i]) {
-			i++
-		}
-	}
-
-	return i
-}

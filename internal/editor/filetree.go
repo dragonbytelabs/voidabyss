@@ -159,18 +159,6 @@ func (ft *FileTree) flattenNode(node *FileTreeNode, depth int) {
 	}
 }
 
-// toggleExpanded toggles the expansion state of the current node
-func (ft *FileTree) toggleExpanded() {
-	if ft.cursor >= 0 && ft.cursor < len(ft.flat) {
-		node := ft.flat[ft.cursor]
-		if node.isDir {
-			node.expanded = !node.expanded
-			ft.rebuildFlat()
-			ft.ensureCursorValid()
-		}
-	}
-}
-
 // ensureCursorValid ensures cursor is within valid range
 func (ft *FileTree) ensureCursorValid() {
 	if ft.cursor >= len(ft.flat) {
