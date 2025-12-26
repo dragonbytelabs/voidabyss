@@ -28,22 +28,39 @@ func TestExpandLeader(t *testing.T) {
 
 func TestParseKeyNotation(t *testing.T) {
 	tests := []struct {
-		input string
-		want  string
+		input  string
+		leader string
+		want   string
 	}{
-		{"<CR>", "\r"},
-		{"<Esc>", "\x1b"},
-		{"<Tab>", "\t"},
-		{"<BS>", "\x08"},
-		{"<Space>", " "},
-		{"jj", "jj"},
-		{"<CR><CR>", "\r\r"},
+		{"<CR>", " ", "\r"},
+		{"<Esc>", " ", "\x1b"},
+		{"<Tab>", " ", "\t"},
+		{"<BS>", " ", "\x08"},
+		{"<Space>", " ", " "},
+		{"<Del>", " ", "\x7f"},
+		{"jj", " ", "jj"},
+		{"<CR><CR>", " ", "\r\r"},
+		{"<leader>w", " ", " w"},
+		{"<leader>q", ",", ",q"},
+		// Case insensitive
+		{"<cr>", " ", "\r"},
+		{"<esc>", " ", "\x1b"},
+		{"<tab>", " ", "\t"},
+		{"<space>", " ", " "},
+		// Mixed case
+		{"<Cr>", " ", "\r"},
+		{"<ESC>", " ", "\x1b"},
+		{"<TAB>", " ", "\t"},
+		// Complex sequences
+		{":w<CR>", " ", ":w\r"},
+		{"dd<CR>", " ", "dd\r"},
+		{"<leader>w<CR>", " ", " w\r"},
 	}
 
 	for _, tt := range tests {
-		got := ParseKeyNotation(tt.input)
+		got := ParseKeyNotation(tt.input, tt.leader)
 		if got != tt.want {
-			t.Errorf("ParseKeyNotation(%q) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("ParseKeyNotation(%q, %q) = %q, want %q", tt.input, tt.leader, got, tt.want)
 		}
 	}
 }

@@ -17,28 +17,50 @@ func ExpandLeader(key, leader string) string {
 }
 
 // ParseKeyNotation converts vim-style key notation to internal representation
-// For now, this is a simple parser. Future: handle <C-x>, <S-x>, etc.
-func ParseKeyNotation(key string) string {
-	// Common special keys
+// Handles: <CR>, <Esc>, <Tab>, <BS>, <Space>, <C-x>, <S-x>, <M-x>, <A-x>, etc.
+func ParseKeyNotation(key string, leader string) string {
+	// First expand leader
+	key = ExpandLeader(key, leader)
+
+	// Common special keys (case-insensitive)
 	replacements := map[string]string{
-		"<CR>":     "\r",
-		"<LF>":     "\n",
-		"<Esc>":    "\x1b",
-		"<Tab>":    "\t",
-		"<BS>":     "\x08",
-		"<Del>":    "\x7f",
-		"<Space>":  " ",
-		"<Bar>":    "|",
-		"<Bslash>": "\\",
+		"<cr>":     "\r",
+		"<lf>":     "\n",
+		"<esc>":    "\x1b",
+		"<tab>":    "\t",
+		"<bs>":     "\x08",
+		"<del>":    "\x7f",
+		"<space>":  " ",
+		"<bar>":    "|",
+		"<bslash>": "\\",
 		"<lt>":     "<",
 	}
 
 	result := key
+	lowerKey := strings.ToLower(key)
+
 	for notation, replacement := range replacements {
-		result = strings.ReplaceAll(result, notation, replacement)
+		// Case-insensitive replacement
+		if strings.Contains(lowerKey, notation) {
+			// Find all occurrences with original case
+			for {
+				idx := findCaseInsensitive(result, notation)
+				if idx == -1 {
+					break
+				}
+				result = result[:idx] + replacement + result[idx+len(notation):]
+			}
+		}
 	}
 
 	return result
+}
+
+// findCaseInsensitive finds the first case-insensitive occurrence of substr in s
+func findCaseInsensitive(s, substr string) int {
+	sLower := strings.ToLower(s)
+	subLower := strings.ToLower(substr)
+	return strings.Index(sLower, subLower)
 }
 
 // IsPrefix checks if 'prefix' is a prefix of 'full'

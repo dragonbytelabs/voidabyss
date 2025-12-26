@@ -50,10 +50,3 @@ func (e *Editor) CompleteCancel() {
 func (e *Editor) ExecCommand(cmd string) bool {
 	return e.exec(cmd)
 }
-
-// Feedkeys simulates key input (stub for now - would need key parsing from task 4)
-func (e *Editor) Feedkeys(keys string) {
-	// TODO: Implement once we have key notation parser (task 4)
-	// For now, just set status message
-	e.statusMsg = "feedkeys not yet implemented: " + keys
-}
