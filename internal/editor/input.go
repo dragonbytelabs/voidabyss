@@ -562,7 +562,7 @@ func (e *Editor) handleVisual(k *tcell.EventKey) {
 		case 'l':
 			e.moveRight(1)
 			return
-		case 'd', 'y', 'c':
+		case 'd', 'y', 'c', 'p':
 			start, end, kind := e.visualRange()
 			if end <= start {
 				e.statusMsg = "nothing"
@@ -595,6 +595,37 @@ func (e *Editor) handleVisual(k *tcell.EventKey) {
 				e.visualExit()
 				e.buffer.BeginUndoGroup()
 				e.mode = ModeInsert
+			case 'p':
+				// Paste over selection: delete selection, put it in register, paste from yank
+				deleted, _ := e.buffer.Slice(start, end)
+
+				// Get the register to paste (respecting " override, default to "0 yank)
+				reg, ok := e.readPaste()
+				if !ok || reg.text == "" {
+					e.statusMsg = "nothing to paste"
+					e.visualExit()
+					return
+				}
+
+				// Delete the selection
+				_ = e.buffer.Delete(start, end)
+
+				// Save deleted text to delete register (black hole, like Vim)
+				e.writeDelete(Register{kind: kind, text: deleted})
+
+				// Paste the yanked content at the start position
+				_ = e.buffer.Insert(start, reg.text)
+
+				// Move cursor to end of pasted text (or start for linewise)
+				if reg.kind == RegLinewise {
+					e.setCursorFromPos(start)
+				} else {
+					e.setCursorFromPos(start + len(reg.text) - 1)
+				}
+				e.wantX = e.cx
+				e.dirty = true
+				e.statusMsg = "pasted"
+				e.visualExit()
 			}
 			return
 

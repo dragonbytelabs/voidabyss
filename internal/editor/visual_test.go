@@ -160,3 +160,32 @@ func TestVisualLine_MultipleLines(t *testing.T) {
 		t.Fatalf("expected 'a\\nd', got %q", got)
 	}
 }
+
+func TestVisualPaste(t *testing.T) {
+	ed := newTestEditor(t, "one two three")
+
+	// First, yank "two"
+	ed.cx = 4 // position at 't' in "two"
+	ed.handleKey(tcell.NewEventKey(tcell.KeyRune, 'v', tcell.ModNone))
+	ed.handleKey(tcell.NewEventKey(tcell.KeyRune, 'l', tcell.ModNone))
+	ed.handleKey(tcell.NewEventKey(tcell.KeyRune, 'l', tcell.ModNone))
+	ed.handleKey(tcell.NewEventKey(tcell.KeyRune, 'y', tcell.ModNone))
+
+	// Now select "one" and paste "two" over it
+	ed.cx = 0
+	ed.handleKey(tcell.NewEventKey(tcell.KeyRune, 'v', tcell.ModNone))
+	ed.handleKey(tcell.NewEventKey(tcell.KeyRune, 'l', tcell.ModNone))
+	ed.handleKey(tcell.NewEventKey(tcell.KeyRune, 'l', tcell.ModNone))
+	ed.handleKey(tcell.NewEventKey(tcell.KeyRune, 'p', tcell.ModNone))
+
+	result := ed.buffer.String()
+	expected := "two two three"
+	if result != expected {
+		t.Fatalf("expected %q, got %q", expected, result)
+	}
+
+	// Check that we're back in normal mode
+	if ed.mode != ModeNormal {
+		t.Fatalf("expected normal mode after paste, got %v", ed.mode)
+	}
+}
