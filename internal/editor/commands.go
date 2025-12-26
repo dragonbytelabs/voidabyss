@@ -1,8 +1,8 @@
 package editor
 
 import (
-"os"
-"path/filepath"
+	"os"
+	"path/filepath"
 )
 
 func (e *Editor) exec(cmd string) bool {
@@ -41,6 +41,10 @@ func (e *Editor) exec(cmd string) bool {
 		e.nextBuffer()
 	case "bp", "bprev", "bprevious":
 		e.prevBuffer()
+	case "bd", "bdelete":
+		e.deleteBuffer()
+	case "bd!", "bdelete!":
+		e.deleteBufferForce()
 	case "ls", "buffers":
 		e.listBuffers()
 	case "Explore", "Ex":

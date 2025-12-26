@@ -91,17 +91,68 @@ func (e *Editor) listBuffers() {
 		if i == e.currentBuffer {
 			current = "%"
 		}
-		name := filepath.Base(buf.filename)
-		if name == "" {
-			name = "[No Name]"
+
+		// Show relative path if possible
+		displayPath := buf.filename
+		if wd, err := os.Getwd(); err == nil {
+			if rel, err := filepath.Rel(wd, buf.filename); err == nil {
+				displayPath = rel
+			}
 		}
-		lines = append(lines, fmt.Sprintf("%s%2d %s %s", current, i+1, dirtyMark, name))
+		if displayPath == "" {
+			displayPath = "[No Name]"
+		}
+
+		lines = append(lines, fmt.Sprintf("%s%2d %s %s", current, i+1, dirtyMark, displayPath))
 	}
 
-	// Join with newlines for multi-line display, or with separators if few buffers
-	if len(lines) <= 4 {
-		e.statusMsg = strings.Join(lines, "  |  ")
-	} else {
-		e.statusMsg = strings.Join(lines, "\n")
+	e.popupFixedH = 0 // auto-size
+	e.openPopup("BUFFERS", lines)
+}
+
+// deleteBuffer closes the current buffer
+func (e *Editor) deleteBuffer() {
+	if len(e.buffers) == 1 {
+		e.statusMsg = "cannot delete last buffer"
+		return
 	}
+
+	if e.dirty {
+		e.statusMsg = "No write since last change (use :bd! to override)"
+		return
+	}
+
+	// Remove current buffer
+	e.buffers = append(e.buffers[:e.currentBuffer], e.buffers[e.currentBuffer+1:]...)
+
+	// Adjust current buffer index
+	if e.currentBuffer >= len(e.buffers) {
+		e.currentBuffer = len(e.buffers) - 1
+	}
+
+	// Load the new current buffer
+	e.syncFromBuffer()
+
+	e.statusMsg = fmt.Sprintf("buffer deleted; now at buffer %d/%d", e.currentBuffer+1, len(e.buffers))
+}
+
+// deleteBufferForce closes the current buffer without checking if dirty
+func (e *Editor) deleteBufferForce() {
+	if len(e.buffers) == 1 {
+		e.statusMsg = "cannot delete last buffer"
+		return
+	}
+
+	// Remove current buffer
+	e.buffers = append(e.buffers[:e.currentBuffer], e.buffers[e.currentBuffer+1:]...)
+
+	// Adjust current buffer index
+	if e.currentBuffer >= len(e.buffers) {
+		e.currentBuffer = len(e.buffers) - 1
+	}
+
+	// Load the new current buffer
+	e.syncFromBuffer()
+
+	e.statusMsg = fmt.Sprintf("buffer deleted; now at buffer %d/%d", e.currentBuffer+1, len(e.buffers))
 }
