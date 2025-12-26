@@ -8,15 +8,22 @@ import (
 
 // Config holds all editor configuration
 type Config struct {
+	Options       *Options
+	KeyMappings   []KeyMapping
+	Commands      []Command
+	EventHandlers []EventHandler
+	Plugins       []string
+	PluginDir     string
+	State         *State
+
+	// Legacy fields for backwards compatibility
 	TabWidth         int
 	RelativeLineNums bool
 	ShowLineNumbers  bool
-	KeyMaps          map[string]KeyMap
-	PluginDir        string
-	Plugins          []string
+	KeyMaps          map[string]KeyMap // Deprecated, use KeyMappings
 }
 
-// KeyMap represents a key mapping
+// KeyMap represents a key mapping (legacy)
 type KeyMap struct {
 	Mode string
 	From string
@@ -25,13 +32,22 @@ type KeyMap struct {
 
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
+	state := NewState()
+	state.Load() // Load existing state if available
+
 	return &Config{
+		Options:       DefaultOptions(),
+		KeyMappings:   []KeyMapping{},
+		Commands:      []Command{},
+		EventHandlers: []EventHandler{},
+		KeyMaps:       make(map[string]KeyMap),
+		PluginDir:     getDefaultPluginDir(),
+		Plugins:       []string{},
+		State:         state,
+		// Legacy fields
 		TabWidth:         4,
 		RelativeLineNums: false,
 		ShowLineNumbers:  true,
-		KeyMaps:          make(map[string]KeyMap),
-		PluginDir:        getDefaultPluginDir(),
-		Plugins:          []string{},
 	}
 }
 
@@ -93,26 +109,40 @@ func CreateDefaultConfig() error {
 		return nil
 	}
 
-	defaultConfig := `-- Voidabyss Configuration File
--- Tab width
-vb = {}
-vb.opt = {}
+	defaultConfig := `-- VoidAbyss Configuration File
+-- See https://github.com/dragonbytelabs/voidabyss for full documentation
+
+-- Options
 vb.opt.tabwidth = 4
+vb.opt.expandtab = false
 vb.opt.number = true
 vb.opt.relativenumber = false
+vb.opt.leader = " "  -- Space as leader key
 
--- Key mappings
--- keymap("n", "jj", "<Esc>")
+-- Keymaps
+-- Format: vb.keymap(mode, lhs, rhs, { desc = "description" })
+-- Modes: "n" (normal), "i" (insert), "v" (visual), "c" (command)
+
+vb.keymap("n", "<leader>w", ":w<CR>", { desc = "save file" })
+vb.keymap("n", "<leader>q", ":q<CR>", { desc = "quit" })
+vb.keymap("i", "jj", "<Esc>", { desc = "exit insert mode" })
+
+-- Commands
+-- vb.command("W", ":w<CR>", { desc = "write file" })
+
+-- Events
+vb.on("EditorReady", function(ctx)
+	vb.notify("VoidAbyss ready!", "info")
+end)
+
+-- Persistent state example
+-- local count = vb.state.get("boot_count", 0)
+-- vb.state.set("boot_count", count + 1)
 
 -- Plugins
-vb.plugins = {}
-
--- Hooks
-function on_startup()
-end
-
-function on_file_open()
-end
+vb.plugins = {
+	-- "username/plugin-name",
+}
 `
 
 	return os.WriteFile(configPath, []byte(defaultConfig), 0644)

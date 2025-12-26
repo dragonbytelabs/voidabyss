@@ -41,13 +41,11 @@ func TestLuaConfigLoading(t *testing.T) {
 	testConfigPath := filepath.Join(tmpDir, "init.lua")
 
 	testConfig := `
-vb = {}
-vb.opt = {}
 vb.opt.tabwidth = 8
 vb.opt.number = false
 vb.opt.relativenumber = true
 
-map("n", "jj", "<Esc>")
+vb.keymap("n", "jj", "<Esc>")
 
 vb.plugins = {"plugin1"}
 `
@@ -64,23 +62,23 @@ vb.plugins = {"plugin1"}
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	loader.extractConfig()
+	loader.extractLegacyPlugins()
 	cfg := loader.config
 
-	if cfg.TabWidth != 8 {
-		t.Errorf("expected TabWidth=8, got %d", cfg.TabWidth)
+	if cfg.Options.TabWidth != 8 {
+		t.Errorf("expected TabWidth=8, got %d", cfg.Options.TabWidth)
 	}
 
-	if cfg.ShowLineNumbers != false {
-		t.Error("expected ShowLineNumbers=false")
+	if cfg.Options.Number != false {
+		t.Error("expected Number=false")
 	}
 
-	if cfg.RelativeLineNums != true {
-		t.Error("expected RelativeLineNums=true")
+	if cfg.Options.RelativeNumber != true {
+		t.Error("expected RelativeNumber=true")
 	}
 
-	if len(cfg.KeyMaps) != 1 {
-		t.Errorf("expected 1 keymap, got %d", len(cfg.KeyMaps))
+	if len(cfg.KeyMappings) != 1 {
+		t.Errorf("expected 1 keymap, got %d", len(cfg.KeyMappings))
 	}
 
 	if len(cfg.Plugins) != 1 {
