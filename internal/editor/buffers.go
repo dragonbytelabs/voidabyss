@@ -18,9 +18,11 @@ func (e *Editor) openFile(path string) {
 	// Check if file is already open
 	for i, buf := range e.buffers {
 		if buf.filename == abs {
+			e.FireBufLeave()
 			e.syncToBuffer() // save current buffer state
 			e.currentBuffer = i
 			e.syncFromBuffer() // load new buffer state
+			e.FireBufEnter()
 			e.statusMsg = fmt.Sprintf("switched to buffer %d: %s", i+1, filepath.Base(abs))
 			return
 		}
@@ -35,13 +37,21 @@ func (e *Editor) openFile(path string) {
 
 	// Create new buffer
 	bufView := NewBufferView(txt, abs)
+	e.FireBufLeave()
 	e.syncToBuffer() // save current buffer state first
 	e.buffers = append(e.buffers, bufView)
 	e.currentBuffer = len(e.buffers) - 1
 	e.syncFromBuffer() // load new buffer state
+	e.FireBufNew()
+	e.FireBufRead()
 
 	// Apply filetype-specific options
 	e.setFiletypeOptions()
+	// Fire FileType event
+	if ft := e.getFiletype(); ft != nil {
+		e.FireFileType(ft.Name)
+	}
+	e.FireBufEnter()
 
 	if readErr != nil && !os.IsNotExist(readErr) {
 		e.statusMsg = "error: " + readErr.Error()
@@ -57,9 +67,11 @@ func (e *Editor) nextBuffer() {
 	if len(e.buffers) == 0 {
 		return
 	}
+	e.FireBufLeave()
 	e.syncToBuffer() // save current buffer state
 	e.currentBuffer = (e.currentBuffer + 1) % len(e.buffers)
 	e.syncFromBuffer() // load new buffer state
+	e.FireBufEnter()
 	e.statusMsg = fmt.Sprintf("buffer %d: %s", e.currentBuffer+1, filepath.Base(e.filename))
 }
 
@@ -68,12 +80,14 @@ func (e *Editor) prevBuffer() {
 	if len(e.buffers) == 0 {
 		return
 	}
+	e.FireBufLeave()
 	e.syncToBuffer() // save current buffer state
 	e.currentBuffer--
 	if e.currentBuffer < 0 {
 		e.currentBuffer = len(e.buffers) - 1
 	}
 	e.syncFromBuffer() // load new buffer state
+	e.FireBufEnter()
 	e.statusMsg = fmt.Sprintf("buffer %d: %s", e.currentBuffer+1, filepath.Base(e.filename))
 }
 
@@ -125,6 +139,9 @@ func (e *Editor) deleteBuffer() {
 		return
 	}
 
+	// Fire BufDelete event
+	e.FireBufDelete(e.currentBuffer)
+
 	// Remove current buffer
 	e.buffers = append(e.buffers[:e.currentBuffer], e.buffers[e.currentBuffer+1:]...)
 
@@ -135,6 +152,7 @@ func (e *Editor) deleteBuffer() {
 
 	// Load the new current buffer
 	e.syncFromBuffer()
+	e.FireBufEnter()
 
 	e.statusMsg = fmt.Sprintf("buffer deleted; now at buffer %d/%d", e.currentBuffer+1, len(e.buffers))
 }
@@ -146,6 +164,9 @@ func (e *Editor) deleteBufferForce() {
 		return
 	}
 
+	// Fire BufDelete event
+	e.FireBufDelete(e.currentBuffer)
+
 	// Remove current buffer
 	e.buffers = append(e.buffers[:e.currentBuffer], e.buffers[e.currentBuffer+1:]...)
 
@@ -156,6 +177,7 @@ func (e *Editor) deleteBufferForce() {
 
 	// Load the new current buffer
 	e.syncFromBuffer()
+	e.FireBufEnter()
 
 	e.statusMsg = fmt.Sprintf("buffer deleted; now at buffer %d/%d", e.currentBuffer+1, len(e.buffers))
 }

@@ -34,7 +34,7 @@ func (e *Editor) FireEvent(eventName string, eventData map[string]interface{}) {
 		}
 
 		// Call the Lua handler
-		e.loader.CallEventHandler( handler.Fn, eventData)
+		e.loader.CallEventHandler(handler.Fn, eventData)
 	}
 }
 
@@ -117,6 +117,108 @@ func (e *Editor) FireInsertEnter() {
 // FireInsertLeave fires when leaving insert mode
 func (e *Editor) FireInsertLeave() {
 	e.FireEvent("InsertLeave", map[string]interface{}{})
+}
+
+// FireBufEnter fires when switching to a buffer
+func (e *Editor) FireBufEnter() {
+	e.FireEvent("BufEnter", map[string]interface{}{
+		"file":  e.filename,
+		"bufnr": e.currentBuffer,
+	})
+}
+
+// FireBufLeave fires when leaving a buffer
+func (e *Editor) FireBufLeave() {
+	e.FireEvent("BufLeave", map[string]interface{}{
+		"file":  e.filename,
+		"bufnr": e.currentBuffer,
+	})
+}
+
+// FireBufNew fires when a new buffer is created
+func (e *Editor) FireBufNew() {
+	e.FireEvent("BufNew", map[string]interface{}{
+		"file":  e.filename,
+		"bufnr": len(e.buffers) - 1,
+	})
+}
+
+// FireBufDelete fires before a buffer is deleted
+func (e *Editor) FireBufDelete(bufIndex int) {
+	filename := ""
+	if bufIndex >= 0 && bufIndex < len(e.buffers) {
+		filename = e.buffers[bufIndex].filename
+	}
+	e.FireEvent("BufDelete", map[string]interface{}{
+		"file":  filename,
+		"bufnr": bufIndex,
+	})
+}
+
+// FireTextChanged fires when text is modified
+func (e *Editor) FireTextChanged() {
+	e.FireEvent("TextChanged", map[string]interface{}{
+		"file": e.filename,
+	})
+}
+
+// FireTextChangedI fires when text is modified in insert mode
+func (e *Editor) FireTextChangedI() {
+	e.FireEvent("TextChangedI", map[string]interface{}{
+		"file": e.filename,
+	})
+}
+
+// FireCursorMoved fires when cursor moves in normal mode
+func (e *Editor) FireCursorMoved() {
+	e.FireEvent("CursorMoved", map[string]interface{}{
+		"line": e.cy,
+		"col":  e.cx,
+	})
+}
+
+// FireCursorMovedI fires when cursor moves in insert mode
+func (e *Editor) FireCursorMovedI() {
+	e.FireEvent("CursorMovedI", map[string]interface{}{
+		"line": e.cy,
+		"col":  e.cx,
+	})
+}
+
+// FireVimEnter fires when editor starts
+func (e *Editor) FireVimEnter() {
+	e.FireEvent("VimEnter", map[string]interface{}{})
+}
+
+// FireVimLeave fires before editor exits
+func (e *Editor) FireVimLeave() {
+	e.FireEvent("VimLeave", map[string]interface{}{})
+}
+
+// FireFileType fires when filetype is detected
+func (e *Editor) FireFileType(filetype string) {
+	e.FireEvent("FileType", map[string]interface{}{
+		"filetype": filetype,
+		"file":     e.filename,
+	})
+}
+
+// FireVisualEnter fires when entering visual mode
+func (e *Editor) FireVisualEnter() {
+	e.FireEvent("VisualEnter", map[string]interface{}{})
+}
+
+// FireVisualLeave fires when leaving visual mode
+func (e *Editor) FireVisualLeave() {
+	e.FireEvent("VisualLeave", map[string]interface{}{})
+}
+
+// FireSearchComplete fires when search completes
+func (e *Editor) FireSearchComplete(query string, matchCount int) {
+	e.FireEvent("SearchComplete", map[string]interface{}{
+		"query":   query,
+		"matches": matchCount,
+	})
 }
 
 // setModeWithEvent sets the mode and fires ModeChanged event

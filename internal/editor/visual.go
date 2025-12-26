@@ -5,12 +5,14 @@ func (e *Editor) visualEnter(kind VisualKind) {
 	e.visualKind = kind
 	e.visualAnchor = e.posFromCursor()
 	e.mode = ModeVisual
+	e.FireVisualEnter()
 }
 
 func (e *Editor) visualExit() {
 	e.visualActive = false
 	e.mode = ModeNormal
 	e.statusMsg = ""
+	e.FireVisualLeave()
 }
 
 func (e *Editor) visualRange() (start, end int, kind RegisterKind) {

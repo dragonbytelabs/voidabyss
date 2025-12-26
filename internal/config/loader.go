@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -39,6 +40,12 @@ func (l *Loader) Load() (*Config, error) {
 	}
 
 	l.ExtractLegacyPlugins()
+
+	// Discover plugins in plugin directory
+	if err := l.DiscoverPlugins(); err != nil {
+		// Non-fatal - just log the error
+		fmt.Fprintf(os.Stderr, "Warning: failed to discover plugins: %v\n", err)
+	}
 
 	// Load plugins after config
 	pluginResults := l.LoadPlugins()

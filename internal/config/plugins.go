@@ -175,3 +175,51 @@ func EnsurePluginDir() error {
 	pluginDir := GetPluginDir()
 	return os.MkdirAll(pluginDir, 0755)
 }
+
+// DiscoverPlugins finds all .lua files in the plugin directory
+// and adds them to the config if not already present
+func (l *Loader) DiscoverPlugins() error {
+	pluginDir := GetPluginDir()
+
+	// Ensure directory exists
+	if err := EnsurePluginDir(); err != nil {
+		return err
+	}
+
+	// Read directory
+	entries, err := os.ReadDir(pluginDir)
+	if err != nil {
+		return err
+	}
+
+	// Track existing plugins to avoid duplicates
+	existing := make(map[string]bool)
+	for _, p := range l.config.Plugins {
+		existing[p] = true
+	}
+
+	// Add any .lua files not already in the list
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".lua") {
+			continue
+		}
+
+		// Remove .lua extension for plugin name
+		pluginName := strings.TrimSuffix(name, ".lua")
+
+		// Skip if already in list
+		if existing[pluginName] {
+			continue
+		}
+
+		// Add to plugins list
+		l.config.Plugins = append(l.config.Plugins, pluginName)
+	}
+
+	return nil
+}

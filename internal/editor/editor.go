@@ -256,6 +256,15 @@ func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (
 		ed.statusMsg = "new file"
 	}
 
+	// Fire startup events
+	ed.FireVimEnter()
+	ed.FireEditorReady()
+	ed.FireBufRead()
+	if ft := ed.getFiletype(); ft != nil {
+		ed.FireFileType(ft.Name)
+	}
+	ed.FireBufEnter()
+
 	return ed, nil
 }
 
@@ -300,11 +309,16 @@ func newEditorFromProject(path string, cfg *config.Config, loader *config.Loader
 	// Register editor as context for Lua buffer operations
 	ed.RegisterWithLoader()
 
+	// Fire startup events
+	ed.FireVimEnter()
+	ed.FireEditorReady()
+
 	return ed, nil
 }
 
 func (e *Editor) run() error {
 	defer e.s.Fini()
+	defer e.FireVimLeave()
 
 	for {
 		// Process notifications from Lua

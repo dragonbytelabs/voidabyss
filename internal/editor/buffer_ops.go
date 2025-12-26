@@ -7,6 +7,7 @@ func (e *Editor) insertRune(r rune) {
 	e.wantX = e.cx
 	e.dirty = true
 	e.reparseBuffer()
+	e.FireTextChangedI()
 }
 
 func (e *Editor) backspace() {
@@ -19,6 +20,7 @@ func (e *Editor) backspace() {
 	e.wantX = e.cx
 	e.dirty = true
 	e.reparseBuffer()
+	e.FireTextChangedI()
 }
 
 func (e *Editor) newline() {
@@ -35,6 +37,11 @@ func (e *Editor) newline() {
 	e.wantX = 0
 	e.dirty = true
 	e.reparseBuffer()
+	if e.mode == ModeInsert {
+		e.FireTextChangedI()
+	} else {
+		e.FireTextChanged()
+	}
 }
 
 func (e *Editor) deleteAtCursor() {
@@ -55,6 +62,8 @@ func (e *Editor) deleteAtCursor() {
 	_ = e.buffer.Delete(pos, pos+1)
 	e.setCursorFromPos(pos)
 	e.dirty = true
+	e.reparseBuffer()
+	e.FireTextChanged()
 	e.statusMsg = "deleted"
 }
 
@@ -73,6 +82,7 @@ func (e *Editor) undo() {
 	e.statusMsg = "undo"
 	e.clearPending()
 	e.reparseBuffer()
+	e.FireTextChanged()
 }
 
 func (e *Editor) redo() {
@@ -90,6 +100,7 @@ func (e *Editor) redo() {
 	e.statusMsg = "redo"
 	e.clearPending()
 	e.reparseBuffer()
+	e.FireTextChanged()
 }
 
 /* linewise */
