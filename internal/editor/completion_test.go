@@ -276,7 +276,7 @@ func TestCompletionSorting_Stable(t *testing.T) {
 	// Verify stable sorting: length first (shorter first), then alphabetical
 	// Expected order: tea, test, tester, tested, testing, terminology
 	expected := []string{"tea", "test", "tested", "tester", "testing", "terminology"}
-	
+
 	if len(e.completionCandidates) != len(expected) {
 		t.Errorf("expected %d candidates, got %d: %v", len(expected), len(e.completionCandidates), e.completionCandidates)
 	}
@@ -304,7 +304,7 @@ func TestCompletionSorting_Stable(t *testing.T) {
 
 	for i := range e.completionCandidates {
 		if e.completionCandidates[i] != e2.completionCandidates[i] {
-			t.Errorf("inconsistent ordering at index %d: %q vs %q", 
+			t.Errorf("inconsistent ordering at index %d: %q vs %q",
 				i, e.completionCandidates[i], e2.completionCandidates[i])
 		}
 	}
@@ -347,5 +347,151 @@ func TestCompletionPopup_Highlighting(t *testing.T) {
 	// First candidate should be selected (with ">")
 	if len(e.popupLines) > 0 && !strings.HasPrefix(e.popupLines[0], "> ") {
 		t.Errorf("first line should start with '> ', got: %q", e.popupLines[0])
+	}
+}
+func TestUndoGrouping_MultipleLines(t *testing.T) {
+	e := newTestEditor(t, "")
+
+	// Enter insert mode and type multiple lines
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'i', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'f', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'i', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'r', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 's', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 't', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 's', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'e', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'c', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'o', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'n', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'd', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 't', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'h', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'i', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'r', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'd', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
+
+	text := e.buffer.String()
+	if text != "first\nsecond\nthird" {
+		t.Fatalf("expected 'first\\nsecond\\nthird', got %q", text)
+	}
+
+	// Undo should remove "third"
+	e.undo()
+	text = e.buffer.String()
+	if text != "first\nsecond" {
+		t.Errorf("expected 'first\\nsecond' after first undo, got %q", text)
+	}
+
+	// Undo should remove "second" (newline was already removed with "third")
+	e.undo()
+	text = e.buffer.String()
+	if text != "first" {
+		t.Errorf("expected 'first' after second undo, got %q", text)
+	}
+
+	// Undo should remove "first" and newline
+	e.undo()
+	text = e.buffer.String()
+	if text != "" {
+		t.Errorf("expected empty after third undo, got %q", text)
+	}
+}
+
+func TestUndoGrouping_WithBackspace(t *testing.T) {
+	e := newTestEditor(t, "")
+
+	// Enter insert mode and type with backspaces
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'i', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 't', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'e', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 's', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'x', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 't', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
+
+	text := e.buffer.String()
+	if text != "test" {
+		t.Fatalf("expected 'test', got %q", text)
+	}
+
+	// Undo should remove entire editing session including backspace
+	e.undo()
+	text = e.buffer.String()
+	if text != "" {
+		t.Errorf("expected empty after undo, got %q", text)
+	}
+}
+
+func TestUndoGrouping_CompletionInteraction(t *testing.T) {
+	e := newTestEditor(t, "hello world")
+
+	// Enter insert mode at end
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'A', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'h', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'e', tcell.ModNone))
+
+	// Trigger completion
+	e.handleKey(tcell.NewEventKey(tcell.KeyCtrlN, 0, tcell.ModNone))
+	if !e.completionActive {
+		t.Fatal("completion should be active")
+	}
+
+	// Exit insert mode (completion should be part of undo group)
+	e.handleKey(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
+
+	text := e.buffer.String()
+	if !strings.HasPrefix(text, "hello world hel") {
+		t.Fatalf("expected completion applied, got %q", text)
+	}
+
+	// Undo should remove entire insert session including completion
+	e.undo()
+	text = e.buffer.String()
+	if text != "hello world" {
+		t.Errorf("expected 'hello world' after undo, got %q", text)
+	}
+}
+
+func TestUndoGrouping_MultipleEnters(t *testing.T) {
+	e := newTestEditor(t, "")
+
+	// Enter insert mode and type text with multiple newlines
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'i', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'a', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'b', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
+
+	text := e.buffer.String()
+	if text != "a\n\nb" {
+		t.Fatalf("expected 'a\\n\\nb', got %q", text)
+	}
+
+	// First undo removes "b"
+	e.undo()
+	text = e.buffer.String()
+	if text != "a\n" {
+		t.Errorf("expected 'a\\n' after first undo, got %q", text)
+	}
+
+	// Second undo removes empty line (second newline)
+	e.undo()
+	text = e.buffer.String()
+	if text != "a" {
+		t.Errorf("expected 'a' after second undo, got %q", text)
+	}
+
+	// Third undo removes "a" and first newline
+	e.undo()
+	text = e.buffer.String()
+	if text != "" {
+		t.Errorf("expected empty after third undo, got %q", text)
 	}
 }

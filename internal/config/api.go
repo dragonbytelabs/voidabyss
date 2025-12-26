@@ -110,6 +110,8 @@ var Features = map[string]bool{
 	"completion.ctrl-n":       true,
 	"completion.stable-sort":  true,
 	"completion.highlighting": true,
+	"undo.grouping":           true,
+	"undo.newline-break":      true,
 	"opt.tabwidth":            true,
 	"opt.expandtab":           true,
 	"opt.leader":              true,
