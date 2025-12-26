@@ -1,5 +1,9 @@
 package editor
 
+import (
+	"github.com/dragonbytelabs/voidabyss/internal/config"
+)
+
 /*
 ====================
   Entry Points
@@ -7,7 +11,13 @@ package editor
 */
 
 func OpenFile(path string) error {
-	ed, err := newEditorFromFile(path)
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		// If config loading fails, use default config
+		cfg = config.DefaultConfig()
+	}
+
+	ed, err := newEditorFromFile(path, cfg)
 	if err != nil {
 		return err
 	}
@@ -15,7 +25,13 @@ func OpenFile(path string) error {
 }
 
 func OpenProject(path string) error {
-	ed, err := newEditorFromProject(path)
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		// If config loading fails, use default config
+		cfg = config.DefaultConfig()
+	}
+
+	ed, err := newEditorFromProject(path, cfg)
 	if err != nil {
 		return err
 	}

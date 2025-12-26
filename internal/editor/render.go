@@ -16,6 +16,7 @@ func (e *Editor) draw() {
 	treeStyle := tcell.StyleDefault.Foreground(tcell.ColorGreen)
 	treeCursorStyle := tcell.StyleDefault.Background(tcell.ColorDarkGreen).Foreground(tcell.ColorWhite)
 	treeBorderStyle := tcell.StyleDefault.Foreground(tcell.ColorGray)
+	lineNumStyle := tcell.StyleDefault.Foreground(tcell.ColorYellow)
 
 	contentStartX := 0
 	contentWidth := w
@@ -63,11 +64,47 @@ func (e *Editor) draw() {
 		contentWidth = w - contentStartX
 	}
 
+	// Calculate line number column width
+	lineNumWidth := 0
+	if e.config != nil && e.config.ShowLineNumbers {
+		totalLines := e.lineCount()
+		lineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 1 // +1 for spacing
+		if lineNumWidth < 4 {
+			lineNumWidth = 4
+		}
+	}
+
 	// Draw buffer content
 	for y := 0; y < h-1; y++ {
 		lineIndex := e.rowOffset + y
 		if lineIndex >= e.lineCount() {
 			break
+		}
+
+		// Draw line number
+		if lineNumWidth > 0 {
+			var lineNum string
+			if e.config.RelativeLineNums {
+				// Relative line numbers
+				diff := lineIndex - e.cy
+				if diff == 0 {
+					lineNum = fmt.Sprintf("%*d", lineNumWidth-1, lineIndex+1)
+				} else {
+					if diff < 0 {
+						diff = -diff
+					}
+					lineNum = fmt.Sprintf("%*d", lineNumWidth-1, diff)
+				}
+			} else {
+				// Absolute line numbers
+				lineNum = fmt.Sprintf("%*d", lineNumWidth-1, lineIndex+1)
+			}
+
+			for i, r := range lineNum {
+				e.s.SetContent(contentStartX+i, y, r, nil, lineNumStyle)
+			}
+			// Add spacing after line number
+			e.s.SetContent(contentStartX+lineNumWidth-1, y, ' ', nil, style)
 		}
 
 		runes := []rune(e.getLine(lineIndex))
@@ -77,7 +114,11 @@ func (e *Editor) draw() {
 		// Calculate absolute position for highlight matching
 		lineStartPos := e.lineStartPos(lineIndex)
 
-		for x := 0; x < contentWidth && x < len(visible); x++ {
+		// Adjust content start and width for line numbers
+		textStartX := contentStartX + lineNumWidth
+		textWidth := contentWidth - lineNumWidth
+
+		for x := 0; x < textWidth && x < len(visible); x++ {
 			absPos := lineStartPos + start + x
 			cellStyle := style
 
@@ -89,7 +130,7 @@ func (e *Editor) draw() {
 				cellStyle = highlightStyle
 			}
 
-			e.s.SetContent(contentStartX+x, y, visible[x], nil, cellStyle)
+			e.s.SetContent(textStartX+x, y, visible[x], nil, cellStyle)
 		}
 	}
 
@@ -99,10 +140,20 @@ func (e *Editor) draw() {
 		e.drawPopup(w, h)
 	}
 
+	// Calculate line number width for cursor positioning
+	cursorLineNumWidth := 0
+	if e.config != nil && e.config.ShowLineNumbers {
+		totalLines := e.lineCount()
+		cursorLineNumWidth = len(fmt.Sprintf("%d", totalLines)) + 1
+		if cursorLineNumWidth < 4 {
+			cursorLineNumWidth = 4
+		}
+	}
+
 	// Position cursor
-	screenX := e.cx - e.colOffset + contentStartX
+	screenX := e.cx - e.colOffset + contentStartX + cursorLineNumWidth
 	screenY := e.cy - e.rowOffset
-	screenX = max(contentStartX, screenX)
+	screenX = max(contentStartX+cursorLineNumWidth, screenX)
 	screenY = max(0, screenY)
 	if screenY > h-2 {
 		screenY = h - 2

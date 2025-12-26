@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dragonbytelabs/voidabyss/core/buffer"
+	"github.com/dragonbytelabs/voidabyss/internal/config"
 	"github.com/gdamore/tcell/v2"
 )
 
@@ -146,7 +147,8 @@ type Editor struct {
 	awaitingMarkJump rune // waiting for mark name after ' or `
 
 	// configuration
-	indentWidth int // number of spaces for indentation
+	indentWidth int            // number of spaces for indentation
+	config      *config.Config // user configuration
 
 	// popup UI
 	popupActive bool
@@ -162,7 +164,7 @@ type Editor struct {
 	focusTree      bool // true if tree has focus, false if buffer has focus
 }
 
-func newEditorFromFile(path string) (*Editor, error) {
+func newEditorFromFile(path string, cfg *config.Config) (*Editor, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -187,12 +189,19 @@ func newEditorFromFile(path string) (*Editor, error) {
 
 	bufView := NewBufferView(txt, abs)
 
+	// Apply tab width from config
+	indentWidth := cfg.TabWidth
+	if indentWidth < 1 {
+		indentWidth = 4
+	}
+
 	ed := &Editor{
 		s:             s,
 		buffers:       []*BufferView{bufView},
 		currentBuffer: 0,
 		mode:          ModeNormal,
-		indentWidth:   4,
+		indentWidth:   indentWidth,
+		config:        cfg,
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.syncFromBuffer()
@@ -206,7 +215,7 @@ func newEditorFromFile(path string) (*Editor, error) {
 	return ed, nil
 }
 
-func newEditorFromProject(path string) (*Editor, error) {
+func newEditorFromProject(path string, cfg *config.Config) (*Editor, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -221,12 +230,19 @@ func newEditorFromProject(path string) (*Editor, error) {
 	}
 	s.Sync()
 
+	// Apply tab width from config
+	indentWidth := cfg.TabWidth
+	if indentWidth < 1 {
+		indentWidth = 4
+	}
+
 	ed := &Editor{
 		s:           s,
 		buffer:      buffer.NewFromString(""),
 		mode:        ModeNormal,
 		filename:    abs,
-		indentWidth: 4,
+		indentWidth: indentWidth,
+		config:      cfg,
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.marks = make(map[rune]Mark)
