@@ -899,15 +899,9 @@ func (l *Loader) luaSchedule(L *lua.LState) int {
 // SafeCallLuaFunction safely calls a Lua function with error handling
 // Returns (success bool, error string)
 func (l *Loader) SafeCallLuaFunction(fn *lua.LFunction, args ...lua.LValue) (bool, string) {
-	// Create error handler function
-	errHandler := l.L.NewFunction(func(L *lua.LState) int {
-		err := L.CheckAny(1)
-		L.Push(lua.LString(fmt.Sprintf("Lua error: %v", err)))
-		return 1
-	})
-
-	// Push error handler
-	l.L.Push(errHandler)
+	if l.L == nil || fn == nil {
+		return false, "Lua state or function is nil"
+	}
 
 	// Push function
 	l.L.Push(fn)
@@ -917,9 +911,12 @@ func (l *Loader) SafeCallLuaFunction(fn *lua.LFunction, args ...lua.LValue) (boo
 		l.L.Push(arg)
 	}
 
-	// Call with protection
-	if err := l.L.PCall(len(args), 0, errHandler); err != nil {
-		return false, err.Error()
+	// Call with protection (no error handler - errors will be returned)
+	if err := l.L.PCall(len(args), 0, nil); err != nil {
+		errMsg := err.Error()
+		// Push error to notifications
+		l.Notifications.Push(errMsg, NotifyError)
+		return false, errMsg
 	}
 
 	return true, ""
@@ -940,18 +937,10 @@ func (c *Config) ProcessScheduledFunctions(L *lua.LState) {
 
 	// Execute each function safely
 	for _, fn := range fns {
-		// Create error handler
-		errHandler := L.NewFunction(func(L *lua.LState) int {
-			err := L.CheckAny(1)
-			fmt.Printf("Scheduled function error: %v\n", err)
-			return 0
-		})
-
-		L.Push(errHandler)
 		L.Push(fn)
 
-		// Call with protection (pcall equivalent)
-		if err := L.PCall(0, 0, errHandler); err != nil {
+		// Call with protection (no error handler - errors will be printed)
+		if err := L.PCall(0, 0, nil); err != nil {
 			fmt.Printf("Error executing scheduled function: %v\n", err)
 		}
 	}
