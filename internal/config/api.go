@@ -112,6 +112,8 @@ var Features = map[string]bool{
 	"completion.highlighting": true,
 	"undo.grouping":           true,
 	"undo.newline-break":      true,
+	"buffer.rune-offsets":     true,
+	"buffer.unicode-safe":     true,
 	"opt.tabwidth":            true,
 	"opt.expandtab":           true,
 	"opt.leader":              true,

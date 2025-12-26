@@ -61,15 +61,16 @@ func (e *Editor) getCurrentWord() (word string, startPos int) {
 		return "", pos
 	}
 
-	text := e.buffer.String()
-	if pos > len(text) {
-		pos = len(text)
+	// Get buffer as rune slice for proper Unicode handling
+	runes := []rune(e.buffer.String())
+	if pos > len(runes) {
+		pos = len(runes)
 	}
 
 	// Walk backwards to find word start
 	start := pos
 	for start > 0 {
-		r := rune(text[start-1])
+		r := runes[start-1]
 		if !isWordChar(r) {
 			break
 		}
@@ -80,7 +81,7 @@ func (e *Editor) getCurrentWord() (word string, startPos int) {
 		return "", pos
 	}
 
-	return text[start:pos], start
+	return string(runes[start:pos]), start
 }
 
 // startCompletion initiates completion mode with initial index
