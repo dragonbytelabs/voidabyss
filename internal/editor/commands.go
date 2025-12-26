@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -10,6 +11,13 @@ func (e *Editor) exec(cmd string) bool {
 	if len(cmd) > 2 && cmd[0:2] == "e " {
 		filename := cmd[2:]
 		e.openFile(filename)
+		return false
+	}
+
+	// Handle :set filetype=<type>
+	if len(cmd) > 13 && cmd[0:13] == "set filetype=" {
+		// This is a placeholder - filetype is auto-detected
+		e.statusMsg = "filetype is auto-detected from file extension"
 		return false
 	}
 
@@ -68,6 +76,14 @@ func (e *Editor) exec(cmd string) bool {
 	case "noh", "nohlsearch":
 		e.searchMatches = nil
 		e.statusMsg = "search highlight cleared"
+	case "set":
+		// Show current filetype and settings
+		ft := e.getFiletype()
+		if ft != nil {
+			e.statusMsg = fmt.Sprintf("filetype=%s tabwidth=%d", ft.Name, e.indentWidth)
+		} else {
+			e.statusMsg = fmt.Sprintf("filetype=none tabwidth=%d", e.indentWidth)
+		}
 	default:
 		e.statusMsg = "Not a command: " + cmd
 	}

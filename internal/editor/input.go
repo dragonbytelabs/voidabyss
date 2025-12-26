@@ -371,6 +371,21 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 			return
 		}
 
+		// special case: gcc toggle comment
+		if op == 'g' && r == 'c' {
+			// Wait for another 'c'
+			e.pendingOp = 'c' // Change pending op to 'c' for gcc
+			e.pendingOpCount = cnt
+			return
+		}
+		if op == 'c' && r == 'c' {
+			// gcc - toggle comment on cnt lines
+			endLine := min(e.cy+cnt-1, e.lineCount()-1)
+			e.toggleCommentLines(e.cy, endLine)
+			e.statusMsg = "toggled comment"
+			return
+		}
+
 		e.applyOperatorMotion(op, r, cnt)
 		return
 	}

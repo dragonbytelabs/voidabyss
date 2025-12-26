@@ -244,6 +244,9 @@ func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (
 	// Initialize splits
 	ed.initSplits()
 
+	// Apply filetype-specific options
+	ed.setFiletypeOptions()
+
 	// Register editor as context for Lua buffer operations
 	ed.RegisterWithLoader()
 

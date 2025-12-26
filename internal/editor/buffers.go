@@ -40,6 +40,9 @@ func (e *Editor) openFile(path string) {
 	e.currentBuffer = len(e.buffers) - 1
 	e.syncFromBuffer() // load new buffer state
 
+	// Apply filetype-specific options
+	e.setFiletypeOptions()
+
 	if readErr != nil && !os.IsNotExist(readErr) {
 		e.statusMsg = "error: " + readErr.Error()
 	} else if readErr != nil && os.IsNotExist(readErr) {
