@@ -21,7 +21,7 @@ type EditorContext interface {
 	Delete(start, end int)
 	Len() int
 
-	// Mode operations (for future ctx)
+	// Mode operations
 	Mode() string
 	SetMode(mode string)
 }
@@ -30,6 +30,3 @@ type EditorContext interface {
 func (l *Loader) SetEditorContext(ctx EditorContext) {
 	l.editorCtx = ctx
 }
-
-// Add field to Loader struct (will be added to loader.go)
-// editorCtx EditorContext
