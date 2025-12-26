@@ -15,7 +15,7 @@ func TestCommandHistory(t *testing.T) {
 		// Enter command mode
 		e.mode = ModeCommand
 		e.cmdBuf = []rune(cmd)
-		
+
 		// Press Enter
 		e.handleKey(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone))
 	}
@@ -31,7 +31,7 @@ func TestCommandHistory(t *testing.T) {
 
 	// Press Up arrow - should get most recent command
 	e.handleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone))
-	
+
 	lastCmd := commands[len(commands)-1]
 	if got := string(e.cmdBuf); got != lastCmd {
 		t.Errorf("After up arrow, cmdBuf = %q, want %q", got, lastCmd)
@@ -39,7 +39,7 @@ func TestCommandHistory(t *testing.T) {
 
 	// Press Up again - should get second-to-last command
 	e.handleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone))
-	
+
 	secondLastCmd := commands[len(commands)-2]
 	if got := string(e.cmdBuf); got != secondLastCmd {
 		t.Errorf("After second up arrow, cmdBuf = %q, want %q", got, secondLastCmd)
@@ -47,14 +47,14 @@ func TestCommandHistory(t *testing.T) {
 
 	// Press Down - should go back to most recent
 	e.handleKey(tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone))
-	
+
 	if got := string(e.cmdBuf); got != lastCmd {
 		t.Errorf("After down arrow, cmdBuf = %q, want %q", got, lastCmd)
 	}
 
 	// Press Down again - should restore empty buffer
 	e.handleKey(tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone))
-	
+
 	if got := string(e.cmdBuf); got != "" {
 		t.Errorf("After final down arrow, cmdBuf = %q, want empty", got)
 	}
@@ -113,13 +113,13 @@ func TestCommandHistoryEmpty(t *testing.T) {
 	e.cmdBuf = nil
 
 	e.handleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone))
-	
+
 	if len(e.cmdBuf) != 0 {
 		t.Errorf("Up arrow on empty history should do nothing, got cmdBuf = %q", string(e.cmdBuf))
 	}
 
 	e.handleKey(tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone))
-	
+
 	if len(e.cmdBuf) != 0 {
 		t.Errorf("Down arrow on empty history should do nothing, got cmdBuf = %q", string(e.cmdBuf))
 	}

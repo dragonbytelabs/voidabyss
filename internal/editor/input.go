@@ -873,6 +873,7 @@ func (e *Editor) handleCommand(k *tcell.EventKey) bool {
 		e.cmdBuf = nil
 		e.cmdHistoryIdx = -1
 		e.cmdHistorySave = nil
+		e.resetCommandCompletion()
 		e.mode = ModeNormal
 
 		// Save non-empty commands to history
@@ -889,11 +890,30 @@ func (e *Editor) handleCommand(k *tcell.EventKey) bool {
 
 		return e.exec(cmd)
 
+	case tcell.KeyTab:
+		// Tab completion
+		e.completeCommand(true)
+		// Reset history navigation when using completion
+		e.cmdHistoryIdx = -1
+		e.cmdHistorySave = nil
+		return false
+
+	case tcell.KeyBacktab:
+		// Shift+Tab for backward completion
+		e.completeCommand(false)
+		// Reset history navigation when using completion
+		e.cmdHistoryIdx = -1
+		e.cmdHistorySave = nil
+		return false
+
 	case tcell.KeyUp:
 		// Navigate backward through history (older commands)
 		if len(e.cmdHistory) == 0 {
 			return false
 		}
+
+		// Reset completion when using history
+		e.resetCommandCompletion()
 
 		// First up arrow: save current input and go to most recent
 		if e.cmdHistoryIdx == -1 {
@@ -914,6 +934,9 @@ func (e *Editor) handleCommand(k *tcell.EventKey) bool {
 			return false
 		}
 
+		// Reset completion when using history
+		e.resetCommandCompletion()
+
 		if e.cmdHistoryIdx < len(e.cmdHistory)-1 {
 			// Navigate to newer command
 			e.cmdHistoryIdx++
@@ -930,15 +953,17 @@ func (e *Editor) handleCommand(k *tcell.EventKey) bool {
 		if len(e.cmdBuf) > 0 {
 			e.cmdBuf = e.cmdBuf[:len(e.cmdBuf)-1]
 		}
-		// Reset history navigation if user edits
+		// Reset history navigation and completion if user edits
 		e.cmdHistoryIdx = -1
 		e.cmdHistorySave = nil
+		e.resetCommandCompletion()
 
 	case tcell.KeyRune:
 		e.cmdBuf = append(e.cmdBuf, k.Rune())
-		// Reset history navigation if user types
+		// Reset history navigation and completion if user types
 		e.cmdHistoryIdx = -1
 		e.cmdHistorySave = nil
+		e.resetCommandCompletion()
 	}
 	return false
 }
