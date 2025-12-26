@@ -124,8 +124,11 @@ type Editor struct {
 	mode Mode
 
 	// command mode
-	cmdBuf    []rune
-	statusMsg string
+	cmdBuf         []rune
+	cmdHistory     []string // command history
+	cmdHistoryIdx  int      // current position in history (-1 = not browsing)
+	cmdHistorySave []rune   // saved current input when browsing history
+	statusMsg      string
 
 	// operator pending
 	pendingCount   int
@@ -321,6 +324,8 @@ func newEditorFromProject(path string, cfg *config.Config, loader *config.Loader
 	ed.regs.named = make(map[rune]Register)
 	ed.marks = make(map[rune]Mark)
 	ed.macros = make(map[rune]Macro)
+	ed.cmdHistory = make([]string, 0, 100)
+	ed.cmdHistoryIdx = -1
 	ed.jumpList = make([]JumpListEntry, 0, 100)
 	ed.jumpListIndex = -1
 

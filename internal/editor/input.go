@@ -871,14 +871,74 @@ func (e *Editor) handleCommand(k *tcell.EventKey) bool {
 	case tcell.KeyEnter:
 		cmd := strings.TrimSpace(string(e.cmdBuf))
 		e.cmdBuf = nil
+		e.cmdHistoryIdx = -1
+		e.cmdHistorySave = nil
 		e.mode = ModeNormal
+
+		// Save non-empty commands to history
+		if cmd != "" {
+			// Avoid duplicate consecutive entries
+			if len(e.cmdHistory) == 0 || e.cmdHistory[len(e.cmdHistory)-1] != cmd {
+				e.cmdHistory = append(e.cmdHistory, cmd)
+				// Limit history to 1000 entries
+				if len(e.cmdHistory) > 1000 {
+					e.cmdHistory = e.cmdHistory[1:]
+				}
+			}
+		}
+
 		return e.exec(cmd)
+
+	case tcell.KeyUp:
+		// Navigate backward through history (older commands)
+		if len(e.cmdHistory) == 0 {
+			return false
+		}
+
+		// First up arrow: save current input and go to most recent
+		if e.cmdHistoryIdx == -1 {
+			e.cmdHistorySave = append([]rune(nil), e.cmdBuf...)
+			e.cmdHistoryIdx = len(e.cmdHistory) - 1
+			e.cmdBuf = []rune(e.cmdHistory[e.cmdHistoryIdx])
+		} else if e.cmdHistoryIdx > 0 {
+			// Navigate to older command
+			e.cmdHistoryIdx--
+			e.cmdBuf = []rune(e.cmdHistory[e.cmdHistoryIdx])
+		}
+		return false
+
+	case tcell.KeyDown:
+		// Navigate forward through history (newer commands)
+		if e.cmdHistoryIdx == -1 {
+			// Not browsing history, nothing to do
+			return false
+		}
+
+		if e.cmdHistoryIdx < len(e.cmdHistory)-1 {
+			// Navigate to newer command
+			e.cmdHistoryIdx++
+			e.cmdBuf = []rune(e.cmdHistory[e.cmdHistoryIdx])
+		} else {
+			// Reached the end, restore saved input
+			e.cmdBuf = append([]rune(nil), e.cmdHistorySave...)
+			e.cmdHistoryIdx = -1
+			e.cmdHistorySave = nil
+		}
+		return false
+
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if len(e.cmdBuf) > 0 {
 			e.cmdBuf = e.cmdBuf[:len(e.cmdBuf)-1]
 		}
+		// Reset history navigation if user edits
+		e.cmdHistoryIdx = -1
+		e.cmdHistorySave = nil
+
 	case tcell.KeyRune:
 		e.cmdBuf = append(e.cmdBuf, k.Rune())
+		// Reset history navigation if user types
+		e.cmdHistoryIdx = -1
+		e.cmdHistorySave = nil
 	}
 	return false
 }
