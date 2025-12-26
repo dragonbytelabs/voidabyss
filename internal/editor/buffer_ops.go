@@ -6,6 +6,7 @@ func (e *Editor) insertRune(r rune) {
 	e.setCursorFromPos(pos + 1)
 	e.wantX = e.cx
 	e.dirty = true
+	e.reparseBuffer()
 }
 
 func (e *Editor) backspace() {
@@ -17,6 +18,7 @@ func (e *Editor) backspace() {
 	e.setCursorFromPos(pos - 1)
 	e.wantX = e.cx
 	e.dirty = true
+	e.reparseBuffer()
 }
 
 func (e *Editor) newline() {
@@ -32,6 +34,7 @@ func (e *Editor) newline() {
 	e.setCursorFromPos(pos + 1)
 	e.wantX = 0
 	e.dirty = true
+	e.reparseBuffer()
 }
 
 func (e *Editor) deleteAtCursor() {
@@ -69,6 +72,7 @@ func (e *Editor) undo() {
 	e.dirty = true
 	e.statusMsg = "undo"
 	e.clearPending()
+	e.reparseBuffer()
 }
 
 func (e *Editor) redo() {
@@ -85,6 +89,7 @@ func (e *Editor) redo() {
 	e.dirty = true
 	e.statusMsg = "redo"
 	e.clearPending()
+	e.reparseBuffer()
 }
 
 /* linewise */

@@ -74,6 +74,23 @@ func (e *Editor) draw() {
 		}
 	}
 
+	// Get syntax highlights for entire visible viewport once
+	var highlights []Highlight
+	bv := e.buf()
+	if bv != nil && bv.parser != nil {
+		// Calculate byte range for entire visible viewport
+		firstLine := e.rowOffset
+		lastLine := min(e.rowOffset+h-1, e.lineCount()-1)
+		if firstLine < e.lineCount() && lastLine >= firstLine {
+			startPos := e.lineStartPos(firstLine)
+			endPos := e.buffer.Len()
+			if lastLine < e.lineCount()-1 {
+				endPos = e.lineStartPos(lastLine + 1)
+			}
+			highlights = bv.parser.GetHighlights(startPos, endPos)
+		}
+	}
+
 	// Draw buffer content
 	for y := 0; y < h-1; y++ {
 		lineIndex := e.rowOffset + y
@@ -121,6 +138,14 @@ func (e *Editor) draw() {
 		for x := 0; x < textWidth && x < len(visible); x++ {
 			absPos := lineStartPos + start + x
 			cellStyle := style
+
+			// Check syntax highlighting first (lowest priority)
+			if len(highlights) > 0 {
+				syntaxStyle := e.getSyntaxStyle(absPos, highlights)
+				if syntaxStyle != nil {
+					cellStyle = *syntaxStyle
+				}
+			}
 
 			// Check if this position is in visual selection (takes priority)
 			if e.isInVisualSelection(absPos) {
@@ -375,6 +400,45 @@ func (e *Editor) drawPopup(w, h int) {
 			e.s.SetContent(startX+j, startY+i, r, nil, textStyle)
 		}
 	}
+}
+
+// getSyntaxStyle returns the appropriate style for a given position based on syntax highlighting
+func (e *Editor) getSyntaxStyle(pos int, highlights []Highlight) *tcell.Style {
+	// Find the most specific (smallest/innermost) highlight that contains this position
+	// Search backwards since children are added after parents
+	for i := len(highlights) - 1; i >= 0; i-- {
+		hl := highlights[i]
+		if pos >= hl.StartByte && pos < hl.EndByte {
+			return e.highlightTypeToStyle(hl.Type)
+		}
+	}
+	return nil
+}
+
+// highlightTypeToStyle converts a HighlightType to a tcell.Style
+func (e *Editor) highlightTypeToStyle(hlType HighlightType) *tcell.Style {
+	var style tcell.Style
+	switch hlType {
+	case HighlightKeyword:
+		style = tcell.StyleDefault.Foreground(tcell.ColorPurple).Bold(true)
+	case HighlightFunction:
+		style = tcell.StyleDefault.Foreground(tcell.ColorBlue)
+	case HighlightType_:
+		style = tcell.StyleDefault.Foreground(tcell.ColorTeal)
+	case HighlightString:
+		style = tcell.StyleDefault.Foreground(tcell.ColorGreen)
+	case HighlightNumber:
+		style = tcell.StyleDefault.Foreground(tcell.ColorOrange)
+	case HighlightComment:
+		style = tcell.StyleDefault.Foreground(tcell.ColorGray).Dim(true)
+	case HighlightConstant:
+		style = tcell.StyleDefault.Foreground(tcell.ColorOrange).Bold(true)
+	case HighlightProperty:
+		style = tcell.StyleDefault.Foreground(tcell.ColorLightBlue)
+	default:
+		return nil
+	}
+	return &style
 }
 
 func (e *Editor) previewText(s string, maxN int) string {

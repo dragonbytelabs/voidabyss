@@ -178,6 +178,56 @@ func (e *Editor) setFiletypeOptions() {
 		// These typically use 2 spaces
 		e.indentWidth = 2
 	}
+
+	// Initialize tree-sitter parser for supported languages
+	e.initTreeSitterParser()
+}
+
+// initTreeSitterParser initializes tree-sitter parser for the current buffer
+func (e *Editor) initTreeSitterParser() {
+	ft := e.getFiletype()
+	if ft == nil {
+		return
+	}
+
+	// Get current buffer view
+	bv := e.buf()
+	if bv == nil {
+		return
+	}
+
+	// Close existing parser if any
+	if bv.parser != nil {
+		bv.parser.Close()
+		bv.parser = nil
+	}
+
+	// Create new parser for supported languages
+	parser, err := NewTreeSitterParser(ft.Name)
+	if err != nil || parser == nil {
+		// Language not supported or error creating parser
+		return
+	}
+
+	// Parse current buffer content
+	content := e.buffer.String()
+	if err := parser.Parse(content); err != nil {
+		parser.Close()
+		return
+	}
+
+	bv.parser = parser
+}
+
+// reparseBuffer re-parses the buffer after modifications
+func (e *Editor) reparseBuffer() {
+	bv := e.buf()
+	if bv == nil || bv.parser == nil {
+		return
+	}
+
+	content := e.buffer.String()
+	bv.parser.Parse(content)
 }
 
 // getCommentPrefix returns the comment prefix for the current filetype

@@ -26,6 +26,9 @@ type BufferView struct {
 	// jump list specific to this buffer
 	jumpList      []JumpListEntry
 	jumpListIndex int
+
+	// tree-sitter parser for syntax highlighting
+	parser *TreeSitterParser
 }
 
 // NewBufferView creates a new buffer view from content and filename
