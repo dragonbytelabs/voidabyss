@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
@@ -253,5 +254,98 @@ func TestBuildWordIndex(t *testing.T) {
 		if !expectedWords[word] {
 			t.Errorf("unexpected word in index: %q", word)
 		}
+	}
+}
+func TestCompletionSorting_Stable(t *testing.T) {
+	// Create buffer with words of varying lengths starting with "te"
+	e := newTestEditor(t, "test testing tested tester terminology tea")
+
+	// Type "te" at end
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'A', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 't', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'e', tcell.ModNone))
+
+	// Trigger completion
+	e.handleKey(tcell.NewEventKey(tcell.KeyCtrlN, 0, tcell.ModNone))
+
+	if !e.completionActive {
+		t.Fatal("completion should be active")
+	}
+
+	// Verify stable sorting: length first (shorter first), then alphabetical
+	// Expected order: tea, test, tester, tested, testing, terminology
+	expected := []string{"tea", "test", "tested", "tester", "testing", "terminology"}
+	
+	if len(e.completionCandidates) != len(expected) {
+		t.Errorf("expected %d candidates, got %d: %v", len(expected), len(e.completionCandidates), e.completionCandidates)
+	}
+
+	for i, word := range expected {
+		if i >= len(e.completionCandidates) {
+			break
+		}
+		if e.completionCandidates[i] != word {
+			t.Errorf("candidate %d: expected %q, got %q\nAll: %v", i, word, e.completionCandidates[i], e.completionCandidates)
+		}
+	}
+
+	// Run twice to verify deterministic ordering
+	e2 := newTestEditor(t, "test testing tested tester terminology tea")
+	e2.handleKey(tcell.NewEventKey(tcell.KeyRune, 'A', tcell.ModNone))
+	e2.handleKey(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone))
+	e2.handleKey(tcell.NewEventKey(tcell.KeyRune, 't', tcell.ModNone))
+	e2.handleKey(tcell.NewEventKey(tcell.KeyRune, 'e', tcell.ModNone))
+	e2.handleKey(tcell.NewEventKey(tcell.KeyCtrlN, 0, tcell.ModNone))
+
+	if len(e.completionCandidates) != len(e2.completionCandidates) {
+		t.Error("completion results should be deterministic")
+	}
+
+	for i := range e.completionCandidates {
+		if e.completionCandidates[i] != e2.completionCandidates[i] {
+			t.Errorf("inconsistent ordering at index %d: %q vs %q", 
+				i, e.completionCandidates[i], e2.completionCandidates[i])
+		}
+	}
+}
+
+func TestCompletionPopup_Highlighting(t *testing.T) {
+	e := newTestEditor(t, "hello help helicopter")
+
+	// Type "hel" at end
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'A', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'h', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'e', tcell.ModNone))
+	e.handleKey(tcell.NewEventKey(tcell.KeyRune, 'l', tcell.ModNone))
+
+	// Trigger completion
+	e.handleKey(tcell.NewEventKey(tcell.KeyCtrlN, 0, tcell.ModNone))
+
+	if !e.completionActive {
+		t.Fatal("completion should be active")
+	}
+
+	if !e.popupActive {
+		t.Fatal("popup should be active")
+	}
+
+	// Check that popup lines contain highlighting brackets
+	foundHighlight := false
+	for _, line := range e.popupLines {
+		if strings.Contains(line, "[hel]") {
+			foundHighlight = true
+			break
+		}
+	}
+
+	if !foundHighlight {
+		t.Errorf("expected popup lines to contain [hel] highlighting, got: %v", e.popupLines)
+	}
+
+	// First candidate should be selected (with ">")
+	if len(e.popupLines) > 0 && !strings.HasPrefix(e.popupLines[0], "> ") {
+		t.Errorf("first line should start with '> ', got: %q", e.popupLines[0])
 	}
 }

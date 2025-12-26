@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"sort"
 	"strings"
 )
 
@@ -46,6 +47,10 @@ func (e *Editor) buildWordIndex(excludeStart, excludeEnd int) []string {
 	for word := range words {
 		result = append(result, word)
 	}
+
+	// Sort for deterministic order: alphabetically
+	sort.Strings(result)
+
 	return result
 }
 
@@ -102,6 +107,17 @@ func (e *Editor) startCompletion(initialIndex int) {
 		e.statusMsg = "no completions found"
 		return
 	}
+
+	// Sort candidates for stable, predictable order
+	// Primary: length (shorter first - more common/simple completions)
+	// Secondary: alphabetical (deterministic)
+	sort.SliceStable(candidates, func(i, j int) bool {
+		lenI, lenJ := len(candidates[i]), len(candidates[j])
+		if lenI != lenJ {
+			return lenI < lenJ
+		}
+		return candidates[i] < candidates[j]
+	})
 
 	e.completionActive = true
 	e.completionCandidates = candidates
@@ -187,7 +203,16 @@ func (e *Editor) updateCompletionPopup() {
 		if i == e.completionIndex {
 			prefix = "> "
 		}
-		lines = append(lines, prefix+candidate)
+
+		// Highlight matching prefix by surrounding it with brackets
+		// e.g., if prefix="hel" and candidate="hello", show "[hel]lo"
+		matchLen := len(e.completionPrefix)
+		if matchLen > 0 && matchLen <= len(candidate) {
+			highlighted := "[" + candidate[:matchLen] + "]" + candidate[matchLen:]
+			lines = append(lines, prefix+highlighted)
+		} else {
+			lines = append(lines, prefix+candidate)
+		}
 	}
 
 	e.popupActive = true
