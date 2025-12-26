@@ -8,15 +8,18 @@ import (
 
 // Loader handles loading and parsing Lua configuration
 type Loader struct {
-	L      *lua.LState
-	config *Config
+	L             *lua.LState
+	config        *Config
+	Notifications *NotificationQueue
+	editorCtx     EditorContext // Editor context for buffer operations
 }
 
 // NewLoader creates a new config loader
 func NewLoader() *Loader {
 	return &Loader{
-		L:      lua.NewState(),
-		config: DefaultConfig(),
+		L:             lua.NewState(),
+		config:        DefaultConfig(),
+		Notifications: NewNotificationQueue(),
 	}
 }
 
@@ -67,22 +70,23 @@ func (l *Loader) ExtractLegacyPlugins() {
 }
 
 // LoadConfig is a convenience function to load configuration
-func LoadConfig() (*Config, error) {
+// Returns both config and loader (caller must call loader.Close())
+func LoadConfig() (*Config, *Loader, error) {
 	if err := EnsureConfigDir(); err != nil {
-		return nil, fmt.Errorf("failed to create config dir: %w", err)
+		return nil, nil, fmt.Errorf("failed to create config dir: %w", err)
 	}
 
 	if err := CreateDefaultConfig(); err != nil {
-		return nil, fmt.Errorf("failed to create default config: %w", err)
+		return nil, nil, fmt.Errorf("failed to create default config: %w", err)
 	}
 
 	loader := NewLoader()
-	defer loader.Close()
 
 	config, err := loader.Load()
 	if err != nil {
-		return DefaultConfig(), err
+		loader.Close()
+		return DefaultConfig(), nil, err
 	}
 
-	return config, nil
+	return config, loader, nil
 }

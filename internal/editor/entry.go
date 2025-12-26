@@ -11,29 +11,45 @@ import (
 */
 
 func OpenFile(path string) error {
-	cfg, err := config.LoadConfig()
+	cfg, loader, err := config.LoadConfig()
 	if err != nil {
 		// If config loading fails, use default config
 		cfg = config.DefaultConfig()
 	}
 
-	ed, err := newEditorFromFile(path, cfg)
+	ed, err := newEditorFromFile(path, cfg, loader)
 	if err != nil {
+		if loader != nil {
+			loader.Close()
+		}
 		return err
 	}
+	defer func() {
+		if loader != nil {
+			loader.Close()
+		}
+	}()
 	return ed.run()
 }
 
 func OpenProject(path string) error {
-	cfg, err := config.LoadConfig()
+	cfg, loader, err := config.LoadConfig()
 	if err != nil {
 		// If config loading fails, use default config
 		cfg = config.DefaultConfig()
 	}
 
-	ed, err := newEditorFromProject(path, cfg)
+	ed, err := newEditorFromProject(path, cfg, loader)
 	if err != nil {
+		if loader != nil {
+			loader.Close()
+		}
 		return err
 	}
+	defer func() {
+		if loader != nil {
+			loader.Close()
+		}
+	}()
 	return ed.run()
 }

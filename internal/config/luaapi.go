@@ -443,52 +443,107 @@ func (l *Loader) setupBufTable(vbTable *lua.LTable) {
 
 // Buffer operation stubs (will need editor context for real implementation)
 func (l *Loader) luaBufGetText(L *lua.LState) int {
-	L.Push(lua.LString(""))
+	if l.editorCtx != nil {
+		text := l.editorCtx.GetText()
+		L.Push(lua.LString(text))
+	} else {
+		L.Push(lua.LString(""))
+	}
 	return 1
 }
 
 func (l *Loader) luaBufSetText(L *lua.LState) int {
+	text := L.CheckString(1)
+	if l.editorCtx != nil {
+		l.editorCtx.SetText(text)
+	}
 	return 0
 }
 
 func (l *Loader) luaBufGetName(L *lua.LState) int {
-	L.Push(lua.LString(""))
+	if l.editorCtx != nil {
+		name := l.editorCtx.GetName()
+		L.Push(lua.LString(name))
+	} else {
+		L.Push(lua.LString(""))
+	}
 	return 1
 }
 
 func (l *Loader) luaBufSetName(L *lua.LState) int {
+	name := L.CheckString(1)
+	if l.editorCtx != nil {
+		l.editorCtx.SetName(name)
+	}
 	return 0
 }
 
 func (l *Loader) luaBufCursor(L *lua.LState) int {
-	L.Push(lua.LNumber(0))
-	L.Push(lua.LNumber(0))
+	if l.editorCtx != nil {
+		row, col := l.editorCtx.Cursor()
+		L.Push(lua.LNumber(row))
+		L.Push(lua.LNumber(col))
+	} else {
+		L.Push(lua.LNumber(0))
+		L.Push(lua.LNumber(0))
+	}
 	return 2
 }
 
 func (l *Loader) luaBufSetCursor(L *lua.LState) int {
+	row := L.CheckInt(1)
+	col := L.CheckInt(2)
+	if l.editorCtx != nil {
+		l.editorCtx.SetCursor(row, col)
+	}
 	return 0
 }
 
 func (l *Loader) luaBufLine(L *lua.LState) int {
-	L.Push(lua.LString(""))
+	y := L.CheckInt(1)
+	if l.editorCtx != nil {
+		line := l.editorCtx.Line(y)
+		L.Push(lua.LString(line))
+	} else {
+		L.Push(lua.LString(""))
+	}
 	return 1
 }
 
 func (l *Loader) luaBufSetLine(L *lua.LState) int {
+	y := L.CheckInt(1)
+	text := L.CheckString(2)
+	if l.editorCtx != nil {
+		l.editorCtx.SetLine(y, text)
+	}
 	return 0
 }
 
 func (l *Loader) luaBufInsert(L *lua.LState) int {
+	pos := L.CheckInt(1)
+	text := L.CheckString(2)
+	if l.editorCtx != nil {
+		l.editorCtx.Insert(pos, text)
+	}
 	return 0
 }
 
 func (l *Loader) luaBufDelete(L *lua.LState) int {
+	start := L.CheckInt(1)
+	end := L.CheckInt(2)
+	if l.editorCtx != nil {
+		l.editorCtx.Delete(start, end)
+	}
 	return 0
 }
 
 func (l *Loader) luaBufLen(L *lua.LState) int {
-	L.Push(lua.LNumber(0))
+	if l.editorCtx != nil {
+		length := l.editorCtx.Len()
+		L.Push(lua.LNumber(length))
+	} else {
+		L.Push(lua.LNumber(0))
+	}
 	return 1
 }
 
@@ -552,15 +607,14 @@ func (l *Loader) luaStateKeys(L *lua.LState) int {
 // luaNotify implements vb.notify(msg, level)
 func (l *Loader) luaNotify(L *lua.LState) int {
 	msg := L.CheckString(1)
-	level := "info"
+	levelStr := "info"
 	if L.GetTop() >= 2 {
-		level = L.CheckString(2)
+		levelStr = L.CheckString(2)
 	}
 
-	// Store notification for later retrieval
-	// For now, just format it for status display
-	formatted := fmt.Sprintf("[%s] %s", strings.ToUpper(level), msg)
-	_ = formatted // Will be used when integrated with editor
+	// Push to notification queue
+	level := ParseLevel(levelStr)
+	l.Notifications.Push(msg, level)
 
 	return 0
 }

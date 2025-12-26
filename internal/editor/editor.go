@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dragonbytelabs/voidabyss/core/buffer"
 	"github.com/dragonbytelabs/voidabyss/internal/config"
@@ -149,6 +150,11 @@ type Editor struct {
 	// configuration
 	indentWidth int            // number of spaces for indentation
 	config      *config.Config // user configuration
+	loader      *config.Loader // Lua runtime (for notifications, scheduled tasks, etc.)
+
+	// notifications
+	notifTimeout time.Time                // When current notification should clear
+	notifLevel   config.NotificationLevel // Level of current notification
 
 	// popup UI
 	popupActive bool
@@ -164,7 +170,7 @@ type Editor struct {
 	focusTree      bool // true if tree has focus, false if buffer has focus
 }
 
-func newEditorFromFile(path string, cfg *config.Config) (*Editor, error) {
+func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (*Editor, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -202,9 +208,13 @@ func newEditorFromFile(path string, cfg *config.Config) (*Editor, error) {
 		mode:          ModeNormal,
 		indentWidth:   indentWidth,
 		config:        cfg,
+		loader:        loader,
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.syncFromBuffer()
+
+	// Register editor as context for Lua buffer operations
+	ed.RegisterWithLoader()
 
 	if readErr != nil && !os.IsNotExist(readErr) {
 		ed.statusMsg = "read failed: " + readErr.Error()
@@ -215,7 +225,7 @@ func newEditorFromFile(path string, cfg *config.Config) (*Editor, error) {
 	return ed, nil
 }
 
-func newEditorFromProject(path string, cfg *config.Config) (*Editor, error) {
+func newEditorFromProject(path string, cfg *config.Config, loader *config.Loader) (*Editor, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -243,11 +253,16 @@ func newEditorFromProject(path string, cfg *config.Config) (*Editor, error) {
 		filename:    abs,
 		indentWidth: indentWidth,
 		config:      cfg,
+		loader:      loader,
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.marks = make(map[rune]Mark)
 	ed.jumpList = make([]JumpListEntry, 0, 100)
 	ed.jumpListIndex = -1
+
+	// Register editor as context for Lua buffer operations
+	ed.RegisterWithLoader()
+
 	return ed, nil
 }
 
@@ -255,6 +270,9 @@ func (e *Editor) run() error {
 	defer e.s.Fini()
 
 	for {
+		// Process notifications from Lua
+		e.processNotifications()
+
 		e.ensureCursorValid()
 		e.ensureCursorVisible()
 		e.draw()
