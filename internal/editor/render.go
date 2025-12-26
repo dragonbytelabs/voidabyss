@@ -10,13 +10,17 @@ import (
 func (e *Editor) draw() {
 	e.s.Clear()
 	w, h := e.s.Size()
-	style := tcell.StyleDefault
-	highlightStyle := tcell.StyleDefault.Background(tcell.ColorYellow).Foreground(tcell.ColorBlack)
-	visualStyle := tcell.StyleDefault.Background(tcell.ColorBlue).Foreground(tcell.ColorWhite)
-	treeStyle := tcell.StyleDefault.Foreground(tcell.ColorGreen)
-	treeCursorStyle := tcell.StyleDefault.Background(tcell.ColorDarkGreen).Foreground(tcell.ColorWhite)
-	treeBorderStyle := tcell.StyleDefault.Foreground(tcell.ColorGray)
-	lineNumStyle := tcell.StyleDefault.Foreground(tcell.ColorYellow)
+
+	// Get color scheme
+	scheme := GetColorScheme(e.config.ColorScheme)
+
+	style := tcell.StyleDefault.Background(scheme.Background).Foreground(scheme.Foreground)
+	highlightStyle := tcell.StyleDefault.Background(scheme.SearchBg).Foreground(scheme.Search)
+	visualStyle := tcell.StyleDefault.Background(scheme.VisualBg).Foreground(scheme.Visual)
+	treeStyle := tcell.StyleDefault.Foreground(scheme.TreeDirectory)
+	treeCursorStyle := tcell.StyleDefault.Background(scheme.TreeCursorBg).Foreground(scheme.TreeCursor)
+	treeBorderStyle := tcell.StyleDefault.Foreground(scheme.TreeBorder)
+	lineNumStyle := tcell.StyleDefault.Foreground(scheme.LineNumber).Background(scheme.Background)
 
 	contentStartX := 0
 	contentWidth := w
@@ -431,24 +435,25 @@ func (e *Editor) getSyntaxStyle(pos int, highlights []Highlight) *tcell.Style {
 
 // highlightTypeToStyle converts a HighlightType to a tcell.Style
 func (e *Editor) highlightTypeToStyle(hlType HighlightType) *tcell.Style {
+	scheme := GetColorScheme(e.config.ColorScheme)
 	var style tcell.Style
 	switch hlType {
 	case HighlightKeyword:
-		style = tcell.StyleDefault.Foreground(tcell.ColorPurple).Bold(true)
+		style = tcell.StyleDefault.Foreground(scheme.Keyword).Bold(true)
 	case HighlightFunction:
-		style = tcell.StyleDefault.Foreground(tcell.ColorBlue)
+		style = tcell.StyleDefault.Foreground(scheme.Function)
 	case HighlightType_:
-		style = tcell.StyleDefault.Foreground(tcell.ColorTeal)
+		style = tcell.StyleDefault.Foreground(scheme.Type)
 	case HighlightString:
-		style = tcell.StyleDefault.Foreground(tcell.ColorGreen)
+		style = tcell.StyleDefault.Foreground(scheme.String)
 	case HighlightNumber:
-		style = tcell.StyleDefault.Foreground(tcell.ColorOrange)
+		style = tcell.StyleDefault.Foreground(scheme.Number)
 	case HighlightComment:
-		style = tcell.StyleDefault.Foreground(tcell.ColorGray).Dim(true)
+		style = tcell.StyleDefault.Foreground(scheme.Comment).Dim(true)
 	case HighlightConstant:
-		style = tcell.StyleDefault.Foreground(tcell.ColorOrange).Bold(true)
+		style = tcell.StyleDefault.Foreground(scheme.Constant).Bold(true)
 	case HighlightProperty:
-		style = tcell.StyleDefault.Foreground(tcell.ColorLightBlue)
+		style = tcell.StyleDefault.Foreground(scheme.Property)
 	default:
 		return nil
 	}

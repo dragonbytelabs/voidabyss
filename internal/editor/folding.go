@@ -152,24 +152,29 @@ func (e *Editor) ToggleFold() {
 	}
 }
 
-// findFoldAtLine finds a fold that starts at the given line
+// findFoldAtLine finds a fold that contains or starts at the given line
 func (e *Editor) findFoldAtLine(line int) *FoldRange {
 	// Look for a fold starting at this line first
 	if fold, exists := e.foldRanges[line]; exists {
 		return fold
 	}
 
-	// Look for a fold starting slightly before (within 2 lines)
-	// This helps when cursor is on a brace or similar
-	for offset := 1; offset <= 2; offset++ {
-		if fold, exists := e.foldRanges[line-offset]; exists {
-			if line <= fold.endLine {
-				return fold
+	// Search for any fold that contains this line
+	// Find the innermost (smallest) fold containing the cursor
+	var bestFold *FoldRange
+	bestSize := 999999
+
+	for _, fold := range e.foldRanges {
+		if line >= fold.startLine && line <= fold.endLine {
+			size := fold.endLine - fold.startLine
+			if size < bestSize {
+				bestSize = size
+				bestFold = fold
 			}
 		}
 	}
 
-	return nil
+	return bestFold
 }
 
 // FoldAll folds all foldable regions

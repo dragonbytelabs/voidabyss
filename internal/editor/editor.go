@@ -241,6 +241,7 @@ func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (
 		indentWidth:   indentWidth,
 		config:        cfg,
 		loader:        loader,
+		foldRanges:    make(map[int]*FoldRange),
 	}
 	ed.regs.named = make(map[rune]Register)
 	ed.syncFromBuffer()
@@ -248,8 +249,14 @@ func newEditorFromFile(path string, cfg *config.Config, loader *config.Loader) (
 	// Initialize splits
 	ed.initSplits()
 
-	// Apply filetype-specific options
+	// Apply filetype-specific options (this initializes tree-sitter parser)
 	ed.setFiletypeOptions()
+
+	// Sync parser from buffer view after filetype init
+	if bv := ed.buf(); bv != nil && bv.parser != nil {
+		ed.parser = bv.parser
+		ed.UpdateFoldStates()
+	}
 
 	// Register editor as context for Lua buffer operations
 	ed.RegisterWithLoader()
@@ -387,10 +394,12 @@ func (e *Editor) syncFromBuffer() {
 		e.jumpList = b.jumpList
 		e.jumpListIndex = b.jumpListIndex
 		e.parser = b.parser
-		
+
 		// Initialize fold ranges if parser exists
-		if e.parser != nil && e.foldRanges == nil {
-			e.foldRanges = make(map[int]*FoldRange)
+		if e.parser != nil {
+			if e.foldRanges == nil {
+				e.foldRanges = make(map[int]*FoldRange)
+			}
 			e.UpdateFoldStates()
 		}
 	}

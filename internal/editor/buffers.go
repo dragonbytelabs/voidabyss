@@ -47,6 +47,13 @@ func (e *Editor) openFile(path string) {
 
 	// Apply filetype-specific options
 	e.setFiletypeOptions()
+
+	// Sync parser from buffer view after filetype init
+	if bv := e.buf(); bv != nil && bv.parser != nil {
+		e.parser = bv.parser
+		e.UpdateFoldStates()
+	}
+
 	// Fire FileType event
 	if ft := e.getFiletype(); ft != nil {
 		e.FireFileType(ft.Name)

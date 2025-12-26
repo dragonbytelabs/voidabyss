@@ -28,6 +28,7 @@ type Config struct {
 	TabWidth         int
 	RelativeLineNums bool
 	ShowLineNumbers  bool
+	ColorScheme      string            // Color scheme name
 	KeyMaps          map[string]KeyMap // Deprecated, use KeyMappings
 }
 
@@ -56,6 +57,7 @@ func DefaultConfig() *Config {
 		TabWidth:         4,
 		RelativeLineNums: false,
 		ShowLineNumbers:  true,
+		ColorScheme:      "default",
 	}
 }
 

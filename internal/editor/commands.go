@@ -14,6 +14,14 @@ func (e *Editor) exec(cmd string) bool {
 		return false
 	}
 
+	// Handle :colorscheme <name>
+	if len(cmd) > 12 && cmd[0:12] == "colorscheme " {
+		schemeName := cmd[12:]
+		scheme := GetColorScheme(schemeName)
+		e.ApplyColorScheme(scheme)
+		return false
+	}
+
 	// Handle :set filetype=<type>
 	if len(cmd) > 13 && cmd[0:13] == "set filetype=" {
 		// This is a placeholder - filetype is auto-detected
@@ -98,13 +106,37 @@ func (e *Editor) exec(cmd string) bool {
 		e.FoldAll()
 	case "unfoldall", "ufa":
 		e.UnfoldAll()
+	case "foldinfo":
+		// Debug command to show fold information
+		if e.parser == nil {
+			e.statusMsg = "no parser available"
+		} else if e.foldRanges == nil {
+			e.statusMsg = "fold ranges not initialized"
+		} else {
+			e.statusMsg = fmt.Sprintf("parser: yes, folds: %d", len(e.foldRanges))
+		}
+		return false
+	case "colorschemes":
+		// List available color schemes
+		schemes := ListColorSchemes()
+		lines := make([]string, 0, len(schemes))
+		for _, name := range schemes {
+			marker := " "
+			if name == e.config.ColorScheme {
+				marker = "*"
+			}
+			lines = append(lines, fmt.Sprintf("%s %s", marker, name))
+		}
+		e.popupFixedH = 10
+		e.openPopup("COLOR SCHEMES", lines)
+		return false
 	case "set":
 		// Show current filetype and settings
 		ft := e.getFiletype()
 		if ft != nil {
-			e.statusMsg = fmt.Sprintf("filetype=%s tabwidth=%d", ft.Name, e.indentWidth)
+			e.statusMsg = fmt.Sprintf("filetype=%s tabwidth=%d colorscheme=%s", ft.Name, e.indentWidth, e.config.ColorScheme)
 		} else {
-			e.statusMsg = fmt.Sprintf("filetype=none tabwidth=%d", e.indentWidth)
+			e.statusMsg = fmt.Sprintf("filetype=none tabwidth=%d colorscheme=%s", e.indentWidth, e.config.ColorScheme)
 		}
 	default:
 		e.statusMsg = "Not a command: " + cmd

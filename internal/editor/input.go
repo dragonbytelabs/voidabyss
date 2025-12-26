@@ -332,6 +332,42 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		e.pendingOp = 0
 		e.pendingOpCount = 0
 
+		// folding commands (z prefix) - check BEFORE text objects
+		if op == 'z' {
+			switch r {
+			case 'a':
+				// za - toggle fold
+				e.ToggleFold()
+			case 'c':
+				// zc - close fold
+				fold := e.findFoldAtLine(e.cy)
+				if fold != nil {
+					fold.folded = true
+					e.statusMsg = "folded"
+				} else {
+					e.statusMsg = "no fold at cursor"
+				}
+			case 'o':
+				// zo - open fold
+				fold := e.findFoldAtLine(e.cy)
+				if fold != nil {
+					fold.folded = false
+					e.statusMsg = "unfolded"
+				} else {
+					e.statusMsg = "no fold at cursor"
+				}
+			case 'M':
+				// zM - fold all
+				e.FoldAll()
+			case 'R':
+				// zR - unfold all
+				e.UnfoldAll()
+			default:
+				e.statusMsg = "unknown fold command: z" + string(r)
+			}
+			return
+		}
+
 		// text object prefix
 		if r == 'i' || r == 'a' {
 			e.pendingTextObj = r
@@ -383,44 +419,6 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 			endLine := min(e.cy+cnt-1, e.lineCount()-1)
 			e.toggleCommentLines(e.cy, endLine)
 			e.statusMsg = "toggled comment"
-			return
-		}
-
-		// folding commands (z prefix)
-		if op == 'z' {
-			e.pendingOp = 0
-			e.pendingOpCount = 0
-			switch r {
-			case 'a':
-				// za - toggle fold
-				e.ToggleFold()
-			case 'c':
-				// zc - close fold
-				fold := e.findFoldAtLine(e.cy)
-				if fold != nil {
-					fold.folded = true
-					e.statusMsg = "folded"
-				} else {
-					e.statusMsg = "no fold at cursor"
-				}
-			case 'o':
-				// zo - open fold
-				fold := e.findFoldAtLine(e.cy)
-				if fold != nil {
-					fold.folded = false
-					e.statusMsg = "unfolded"
-				} else {
-					e.statusMsg = "no fold at cursor"
-				}
-			case 'M':
-				// zM - fold all
-				e.FoldAll()
-			case 'R':
-				// zR - unfold all
-				e.UnfoldAll()
-			default:
-				e.statusMsg = "unknown fold command: z" + string(r)
-			}
 			return
 		}
 
@@ -630,6 +628,7 @@ func (e *Editor) handleNormal(k *tcell.EventKey) {
 		// Wait for second character
 		e.pendingOp = 'z'
 		e.pendingOpCount = e.consumeCountOr1()
+		return
 
 	default:
 		log.Printf("unknown normal key: %q", r)
