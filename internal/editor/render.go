@@ -56,8 +56,8 @@ func (e *Editor) renderBufferRegion(bv *BufferView, x, y, width, height int, sch
 	actualLine := bv.rowOffset
 
 	for visualLine < height && actualLine < len(lines) {
-		// Skip folded lines
-		if e.isLineFolded(actualLine) {
+		// Skip folded lines (use buffer's fold ranges)
+		if isLineFoldedInBuffer(bv, actualLine) {
 			actualLine++
 			continue
 		}
@@ -91,8 +91,8 @@ func (e *Editor) renderBufferRegion(bv *BufferView, x, y, width, height int, sch
 				}
 			}
 
-			// Draw fold indicator
-			foldIndicator := e.getFoldIndicator(lineIndex)
+			// Draw fold indicator (use buffer's fold ranges)
+			foldIndicator := getFoldIndicatorForBuffer(bv, lineIndex)
 			if x+lineNumWidth-2 < x+width {
 				e.s.SetContent(x+lineNumWidth-2, screenY, []rune(foldIndicator)[0], nil, lineNumStyle)
 			}
@@ -264,6 +264,7 @@ func (e *Editor) draw() {
 				jumpList:      bv.jumpList,
 				jumpListIndex: bv.jumpListIndex,
 				parser:        bv.parser,
+				foldRanges:    bv.foldRanges,
 			}
 
 			// Use split's view state (cursor, offsets)
@@ -618,4 +619,36 @@ func (e *Editor) previewText(s string, maxN int) string {
 		return s
 	}
 	return string(r[:maxN-1]) + "…"
+}
+
+// isLineFoldedInBuffer checks if a line is folded in a specific buffer
+func isLineFoldedInBuffer(bv *BufferView, line int) bool {
+	if bv == nil || bv.foldRanges == nil {
+		return false
+	}
+
+	// Check if this line is inside a folded range
+	for _, fold := range bv.foldRanges {
+		if fold.folded && line > fold.startLine && line <= fold.endLine {
+			return true
+		}
+	}
+
+	return false
+}
+
+// getFoldIndicatorForBuffer returns fold indicator for a specific buffer
+func getFoldIndicatorForBuffer(bv *BufferView, line int) string {
+	if bv == nil || bv.foldRanges == nil {
+		return " "
+	}
+
+	if fold, exists := bv.foldRanges[line]; exists {
+		if fold.folded {
+			return "▶" // Folded indicator
+		}
+		return "▼" // Foldable but not folded
+	}
+
+	return " "
 }

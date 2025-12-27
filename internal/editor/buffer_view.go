@@ -29,6 +29,9 @@ type BufferView struct {
 
 	// tree-sitter parser for syntax highlighting
 	parser *TreeSitterParser
+
+	// fold ranges for code folding
+	foldRanges map[int]*FoldRange
 }
 
 // NewBufferView creates a new buffer view from content and filename
@@ -40,5 +43,6 @@ func NewBufferView(content, filename string) *BufferView {
 		marks:         make(map[rune]Mark),
 		jumpList:      make([]JumpListEntry, 0, 100),
 		jumpListIndex: -1,
+		foldRanges:    make(map[int]*FoldRange),
 	}
 }

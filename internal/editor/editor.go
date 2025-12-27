@@ -356,6 +356,10 @@ func (e *Editor) run() error {
 
 		e.ensureCursorValid()
 		e.ensureCursorVisible()
+
+		// Save current editor state to split before rendering
+		e.saveSplitState()
+
 		e.draw()
 
 		ev := e.s.PollEvent()
@@ -369,6 +373,8 @@ func (e *Editor) run() error {
 			}
 		case *tcell.EventResize:
 			e.s.Sync()
+			// Recalculate split dimensions for new screen size
+			e.resizeSplits()
 		}
 	}
 }
@@ -395,6 +401,7 @@ func (e *Editor) syncToBuffer() {
 		b.marks = e.marks
 		b.jumpList = e.jumpList
 		b.jumpListIndex = e.jumpListIndex
+		b.foldRanges = e.foldRanges
 	}
 }
 
@@ -413,13 +420,16 @@ func (e *Editor) syncFromBuffer() {
 		e.jumpList = b.jumpList
 		e.jumpListIndex = b.jumpListIndex
 		e.parser = b.parser
+		e.foldRanges = b.foldRanges
 
-		// Initialize fold ranges if parser exists
+		// Initialize fold ranges if parser exists and not yet initialized
 		if e.parser != nil {
 			if e.foldRanges == nil {
 				e.foldRanges = make(map[int]*FoldRange)
 			}
-			e.UpdateFoldStates()
+			if len(e.foldRanges) == 0 {
+				e.UpdateFoldStates()
+			}
 		}
 	}
 }

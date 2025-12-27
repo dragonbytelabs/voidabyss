@@ -49,6 +49,12 @@ func (l *Loader) SetupVbAPI() {
 	// vb.schedule(fn)
 	l.L.SetField(vbTable, "schedule", l.L.NewFunction(l.luaSchedule))
 
+	// Register event system API
+	RegisterEventAPI(l.L)
+
+	// Register LSP API
+	RegisterLSPAPI(l.L)
+
 	// vb.plugins (for legacy compatibility)
 	pluginsTable := l.L.NewTable()
 	l.L.SetField(vbTable, "plugins", pluginsTable)

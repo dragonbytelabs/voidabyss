@@ -49,46 +49,161 @@ func (e *Editor) initSplits() {
 			treeWidth = 20
 		}
 
-		e.splits = []*Split{
-			{
-				splitType: SplitFileTree,
-				width:     treeWidth,
-				height:    height,
-				x:         0,
-				y:         0,
-			},
-			{
-				splitType:   SplitBuffer,
-				bufferIndex: e.currentBuffer,
-				width:       w - treeWidth - 1, // -1 for border
-				height:      height,
-				x:           treeWidth + 1, // actual screen position for navigation
-				y:           0,
-				cx:          e.cx,
-				cy:          e.cy,
-				rowOffset:   e.rowOffset,
-				colOffset:   e.colOffset,
-				wantX:       e.wantX,
-			},
+		// Preserve existing buffer splits if any
+		var bufferSplits []*Split
+		for _, split := range e.splits {
+			if split.splitType == SplitBuffer {
+				bufferSplits = append(bufferSplits, split)
+			}
 		}
-		e.currentSplit = 1 // Start with buffer split focused
+
+		// If no buffer splits exist, create one
+		if len(bufferSplits) == 0 {
+			bufferSplits = []*Split{
+				{
+					splitType:   SplitBuffer,
+					bufferIndex: e.currentBuffer,
+					width:       w - treeWidth - 1,
+					height:      height,
+					x:           treeWidth + 1,
+					y:           0,
+					cx:          e.cx,
+					cy:          e.cy,
+					rowOffset:   e.rowOffset,
+					colOffset:   e.colOffset,
+					wantX:       e.wantX,
+				},
+			}
+		}
+
+		// Recalculate positions and sizes for buffer splits
+		availableWidth := w - treeWidth - 1
+		splitWidth := availableWidth / len(bufferSplits)
+		for i, split := range bufferSplits {
+			split.x = treeWidth + 1 + (i * splitWidth)
+			split.y = 0
+			split.width = splitWidth
+			split.height = height
+		}
+
+		// Create new splits array with tree first, then buffers
+		e.splits = make([]*Split, 0, len(bufferSplits)+1)
+		e.splits = append(e.splits, &Split{
+			splitType: SplitFileTree,
+			width:     treeWidth,
+			height:    height,
+			x:         0,
+			y:         0,
+		})
+		e.splits = append(e.splits, bufferSplits...)
+
+		// Adjust currentSplit index (tree is now at index 0)
+		if e.focusTree {
+			e.currentSplit = 0
+		} else if e.currentSplit < len(e.splits) {
+			e.currentSplit = e.currentSplit // Keep existing if valid
+		} else {
+			e.currentSplit = 1 // Default to first buffer split
+		}
 	} else {
-		e.splits = []*Split{
-			{
-				splitType:   SplitBuffer,
-				bufferIndex: e.currentBuffer,
-				width:       w,
-				height:      height,
-				x:           0,
-				y:           0,
-				cx:          e.cx,
-				cy:          e.cy,
-				rowOffset:   e.rowOffset,
-				colOffset:   e.colOffset,
-				wantX:       e.wantX,
-			},
+		// No tree - preserve existing buffer splits
+		var bufferSplits []*Split
+		for _, split := range e.splits {
+			if split.splitType == SplitBuffer {
+				bufferSplits = append(bufferSplits, split)
+			}
 		}
-		e.currentSplit = 0
+
+		// If no buffer splits exist, create one
+		if len(bufferSplits) == 0 {
+			bufferSplits = []*Split{
+				{
+					splitType:   SplitBuffer,
+					bufferIndex: e.currentBuffer,
+					width:       w,
+					height:      height,
+					x:           0,
+					y:           0,
+					cx:          e.cx,
+					cy:          e.cy,
+					rowOffset:   e.rowOffset,
+					colOffset:   e.colOffset,
+					wantX:       e.wantX,
+				},
+			}
+		}
+
+		// Recalculate positions and sizes for buffer splits
+		splitWidth := w / len(bufferSplits)
+		for i, split := range bufferSplits {
+			split.x = i * splitWidth
+			split.y = 0
+			split.width = splitWidth
+			split.height = height
+		}
+
+		e.splits = bufferSplits
+
+		// Adjust currentSplit if out of bounds
+		if e.currentSplit >= len(e.splits) {
+			e.currentSplit = len(e.splits) - 1
+		}
+		if e.currentSplit < 0 {
+			e.currentSplit = 0
+		}
+	}
+}
+
+// resizeSplits recalculates split dimensions after screen resize
+func (e *Editor) resizeSplits() {
+	w, h := e.s.Size()
+	height := h - 1
+
+	if len(e.splits) == 0 {
+		return
+	}
+
+	// Check if we have a file tree split
+	hasTree := false
+	treeWidth := e.treePanelWidth
+	if e.treeOpen && e.fileTree != nil {
+		if treeWidth > w-10 {
+			treeWidth = w - 10
+		}
+		if treeWidth < 20 {
+			treeWidth = 20
+		}
+		hasTree = true
+	}
+
+	var bufferSplits []*Split
+	for _, split := range e.splits {
+		if split.splitType == SplitFileTree && hasTree {
+			split.width = treeWidth
+			split.height = height
+			split.x = 0
+			split.y = 0
+		} else if split.splitType == SplitBuffer {
+			bufferSplits = append(bufferSplits, split)
+		}
+	}
+
+	// Recalculate buffer split sizes
+	if len(bufferSplits) > 0 {
+		startX := 0
+		availableWidth := w
+		if hasTree {
+			startX = treeWidth + 1
+			availableWidth = w - treeWidth - 1
+		}
+
+		splitWidth := availableWidth / len(bufferSplits)
+		for i, split := range bufferSplits {
+			split.x = startX + (i * splitWidth)
+			split.y = 0
+			split.width = splitWidth
+			split.height = height
+		}
 	}
 }
 

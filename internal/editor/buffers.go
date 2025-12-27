@@ -82,6 +82,11 @@ func (e *Editor) openFile(path string) {
 	if bv := e.buf(); bv != nil && bv.parser != nil {
 		e.parser = bv.parser
 		e.UpdateFoldStates()
+		// Save fold ranges to buffer
+		if bv.foldRanges == nil {
+			bv.foldRanges = make(map[int]*FoldRange)
+		}
+		bv.foldRanges = e.foldRanges
 	}
 
 	// Fire FileType event

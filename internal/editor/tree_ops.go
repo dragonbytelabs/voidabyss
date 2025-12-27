@@ -30,6 +30,8 @@ func (e *Editor) toggleFileTree() {
 		e.statusMsg = "file tree opened"
 		// Reinitialize splits with file tree
 		e.initSplits()
+		// Set current split to tree split when opening
+		e.currentSplit = 0
 	}
 }
 
